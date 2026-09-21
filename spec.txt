@@ -1,0 +1,112 @@
+tpt-chemistry Design Specification (spec.txt)
+1. Overview
+Name: tpt-chemistry
+Description: A pure-Rust, AI-native computational chemistry and molecular simulation library. It provides molecular dynamics (MD), quantum chemistry primitives (Hartree-Fock/DFT), reaction kinetics, and crystallography without C/C++ FFI or external solver dependencies.
+License: MIT (all dependencies must be MIT or compatible; no Apache-2.0-only crates).
+Core Philosophy: Unit-safe, no_std + alloc compatible at the core, differentiable for machine-learned potentials, and mathematically rigorous via native Rust verification tooling and from-scratch implementations.
+2. Design Principles
+Zero External Solver Dependencies: No LAMMPS FFI, no Gaussian, no Quantum ESPRESSO. All algorithms (SCF iteration, electron repulsion integrals, Ewald summation, neighbor lists) are implemented from scratch in pure Rust, leveraging tpt-math for linear algebra and ODE solving.
+Strict Licensing: No Apache-2.0-only dependencies. The workspace strictly uses MIT, MIT/Apache-2.0 dual, or custom in-house crates.
+Type-State & Dimensional Safety: Compile-time prevention of unit and coordinate mismatches. Phantom types distinguish between Cartesian and internal (Z-matrix) coordinates. All physical quantities (distance in Angstroms/Bohr, time in femtoseconds, energy in Hartrees/kJ/mol) are wrapped in tpt-math-units.
+Native Formal Verification: Safety and physical invariants enforced via:
+Kani Rust Verifier: For bounded model checking of critical loops (e.g., proving neighbor-list cell indexing is always in-bounds, or that SCF iteration density matrices remain positive semi-definite).
+Property-Based Testing (proptest): For statistical verification of physical laws (e.g., "Velocity Verlet integration conserves total energy within a bounded tolerance", "mass is strictly conserved in closed reaction networks").
+3. Workspace Layout
+
+tpt-chemistry/
+├── Cargo.toml                 # Workspace manifest (strict dependency linting)
+├── crates/
+│   ├── tpt-chem-core/         # Foundation: Molecular graphs, force fields, physical constants, unit-safe types
+│   ├── tpt-chem-md/           # Molecular Dynamics: Integrators, thermostats, neighbor lists, long-range solvers
+│   ├── tpt-chem-quantum/      # Electronic structure: Gaussian basis sets, SCF, Hartree-Fock, integral evaluation
+│   ├── tpt-chem-kinetics/     # Reaction kinetics: Mass-action ODEs, stochastic simulation (Gillespie), Arrhenius
+│   ├── tpt-chem-crystal/      # Solid state: Bravais lattices, space groups, reciprocal space, XRD simulation
+│   ├── tpt-chem-io/           # File formats: XYZ, PDB, CIF, MOL2, Gaussian input/output parsing
+│   ├── tpt-chem-verify/       # Verification harnesses: Kani proofs, proptest strategies, conservation law checks
+│   └── tpt-chemistry/         # Feature-gated umbrella crate re-exporting all above
+├── spec.txt                   # This document
+└── todo.md                    # Phased build tracking
+
+4. Crate Specifications
+tpt-chem-core
+Purpose: The foundational layer. Defines molecular topology, atom/bond types, and force field parameterization.
+Dependencies: tpt-math (internal, MIT).
+Key Features:
+Graph-based molecular representation with const-generic atom types.
+Force field definitions (Lennard-Jones, Coulomb, harmonic bonds/angles, Ryckaert-Bellemans dihedrals).
+NIST physical constants and unit conversions.
+no_std + alloc compatible.
+tpt-chem-md
+Purpose: Classical molecular dynamics engine for simulating large ensembles of atoms.
+Key Features:
+Symplectic integrators: Velocity Verlet, Leapfrog.
+Thermostats and Barostats: Langevin, Nosé-Hoover, Berendsen.
+Spatial partitioning: From-scratch cell lists and Verlet neighbor lists for 
+O
+(
+N
+)
+O(N) force computation.
+Long-range interactions: Ewald summation and Particle Mesh Ewald (PME) for electrostatics (using tpt-dsp for 3D FFTs).
+tpt-chem-quantum
+Purpose: Electronic structure primitives for ab initio and semi-empirical quantum chemistry.
+Key Features:
+Gaussian-type orbital (GTO) basis set management (STO-nG, Pople, Dunning sets).
+From-scratch evaluation of multi-center electron repulsion integrals (ERIs) using the Obara-Saika or McMurchie-Davidson schemes.
+Self-Consistent Field (SCF) iteration, density mixing, and Hartree-Fock (HF) matrix construction.
+Relies on tpt-math for dense eigenvalue decomposition (solving the Roothaan-Hall equations).
+tpt-chem-kinetics
+Purpose: Simulation of chemical reaction networks and population dynamics.
+Key Features:
+Deterministic mass-action kinetics (stiff ODE systems, leveraging tpt-math solvers).
+Stochastic Simulation Algorithm (SSA / Gillespie algorithm) for low-copy-number regimes.
+Temperature-dependent rate constants (Arrhenius, Eyring equations).
+Equilibrium and steady-state analysis.
+tpt-chem-crystal
+Purpose: Solid-state physics and crystallography primitives.
+Key Features:
+Bravais lattice generation, Miller indices, and Wigner-Seitz cell construction.
+Space group symmetry operations and Wyckoff positions.
+Reciprocal lattice generation and Brillouin zone sampling (k-point grids).
+X-ray diffraction (XRD) pattern simulation from structure factors.
+tpt-chem-io
+Purpose: Interoperability with standard chemical file formats.
+Key Features:
+Parsers and writers for XYZ, PDB, MOL2, and CIF (Crystallographic Information File).
+Trajectory streaming for large MD outputs.
+tpt-chem-verify
+Purpose: Mathematical verification of physical algorithms and conservation laws.
+Key Features:
+proptest strategies for generating valid molecular geometries and force field parameters.
+Kani harnesses to prove absence of panics in ERI evaluation (e.g., handling of singularities when 
+r
+→
+0
+r→0).
+Invariant checks: Verify that symplectic integrators conserve phase-space volume and that reaction networks strictly conserve atomic mass.
+5. Integration & Synergies
+tpt-materials: tpt-chemistry provides the bottom-up micro-scale simulations (MD, DFT) that feed homogenized macro-scale properties (elastic constants, thermal conductivity) into tpt-materials.
+tpt-math: Provides the heavy linear algebra (eigen-solvers for HF, sparse matrix operations for Hamiltonians) and ODE solvers for kinetics.
+tpt-dsp: Provides the 3D FFTs required for Particle Mesh Ewald (PME) in MD, and FFTs of velocity autocorrelation functions to compute vibrational density of states (phonon spectra).
+tpt-fem / tpt-physics: Enables QM/MM (Quantum Mechanics / Molecular Mechanics) coupling, where the quantum region is embedded in a continuum FEM or CFD environment.
+AI-Native Agents: Molecular dynamics forces and quantum energy surfaces expose automatic differentiation hooks. This allows tpt-eve / tpt-anima agents to train machine-learned interatomic potentials (MLIPs) or perform differentiable molecular design.
+6. Phased Rollout (todo.md Alignment)
+Phase 0: Foundation & MD Engine (Weeks 1-3)
+Scaffold workspace with strict dependency linting.
+Implement tpt-chem-core (molecular graphs, force fields, unit-safe types).
+Build tpt-chem-md (Velocity Verlet, cell lists, Lennard-Jones/Coulomb forces).
+Verify energy conservation in MD via proptest.
+Phase 1: Quantum & Kinetics (Weeks 4-6)
+Implement tpt-chem-quantum (GTO basis sets, ERI evaluation, SCF loop).
+Build tpt-chem-kinetics (Gillespie SSA, mass-action ODEs).
+Integration test: Hartree-Fock energy of 
+H
+2
+H 
+2
+​
+  matches analytical/NIST benchmarks.
+Phase 2: Solid State & Advanced Verification (Weeks 7-9)
+Build tpt-chem-crystal (space groups, reciprocal lattice, XRD).
+Implement Ewald/PME summation in tpt-chem-md using tpt-dsp FFTs.
+Write Kani proofs for ERI singularity handling and neighbor-list bounds.
