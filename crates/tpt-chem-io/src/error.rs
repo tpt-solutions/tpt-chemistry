@@ -57,18 +57,30 @@ impl fmt::Display for IoError {
             IoError::UnexpectedEof { format } => {
                 write!(f, "{format}: unexpected end of input")
             }
-            IoError::Parse { format, line, message } => match line {
+            IoError::Parse {
+                format,
+                line,
+                message,
+            } => match line {
                 Some(n) => write!(f, "{format} line {n}: {message}"),
                 None => write!(f, "{format}: {message}"),
             },
             IoError::MissingSection { format, section } => {
                 write!(f, "{format}: missing section {section:?}")
             }
-            IoError::BadNumber { format, line, token } => match line {
+            IoError::BadNumber {
+                format,
+                line,
+                token,
+            } => match line {
                 Some(n) => write!(f, "{format} line {n}: bad number {token:?}"),
                 None => write!(f, "{format}: bad number {token:?}"),
             },
-            IoError::UnknownElement { format, symbol, line } => match line {
+            IoError::UnknownElement {
+                format,
+                symbol,
+                line,
+            } => match line {
                 Some(n) => write!(f, "{format} line {n}: unknown element {symbol:?}"),
                 None => write!(f, "{format}: unknown element {symbol:?}"),
             },

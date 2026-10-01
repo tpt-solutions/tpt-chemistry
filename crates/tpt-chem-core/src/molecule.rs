@@ -212,12 +212,20 @@ impl Molecule {
         if a == b {
             return Err(MolError::SelfBond);
         }
-        let (lo, hi) = if a.index() < b.index() { (a, b) } else { (b, a) };
+        let (lo, hi) = if a.index() < b.index() {
+            (a, b)
+        } else {
+            (b, a)
+        };
         if self.bond_between(lo, hi).is_some() {
             return Err(MolError::DuplicateBond);
         }
         let bi = self.bonds.len();
-        self.bonds.push(Bond { a: lo, b: hi, order });
+        self.bonds.push(Bond {
+            a: lo,
+            b: hi,
+            order,
+        });
         self.adjacency[lo.index()].push(bi);
         self.adjacency[hi.index()].push(bi);
         Ok(())
@@ -278,7 +286,11 @@ impl Molecule {
         if a.index() >= self.atoms.len() || b.index() >= self.atoms.len() {
             return None;
         }
-        let (lo, hi) = if a.index() < b.index() { (a, b) } else { (b, a) };
+        let (lo, hi) = if a.index() < b.index() {
+            (a, b)
+        } else {
+            (b, a)
+        };
         self.adjacency[a.index()]
             .iter()
             .map(|&bi| &self.bonds[bi])
@@ -386,14 +398,13 @@ impl Molecule {
         for i in 0..n {
             for j in (i + 1)..n {
                 let d = self.atoms[i].pos.dist(self.atoms[j].pos);
-                if d > 0.4 && d < tolerance * (radii[i] + radii[j]) {
-                    if self
+                if d > 0.4 && d < tolerance * (radii[i] + radii[j])
+                    && self
                         .add_bond(AtomId(i as u16), AtomId(j as u16), BondOrder::Single)
                         .is_ok()
                     {
                         added += 1;
                     }
-                }
             }
         }
         added
@@ -425,7 +436,7 @@ mod tests {
             (-0.51, 0.89, -1.35, c2),
             (0.51, -0.89, -1.35, c2),
         ] {
-            let h = m.add_atom::<1>(Vec3::new(hx, hy, z).into());
+            let h = m.add_atom::<1>(Vec3::new(hx, hy, z));
             m.add_bond(h, target, BondOrder::Single).unwrap();
         }
         m
@@ -455,7 +466,10 @@ mod tests {
             m.add_bond(a, b, BondOrder::Single),
             Err(MolError::DuplicateBond)
         );
-        assert_eq!(m.add_bond(b, a, BondOrder::Single), Err(MolError::DuplicateBond));
+        assert_eq!(
+            m.add_bond(b, a, BondOrder::Single),
+            Err(MolError::DuplicateBond)
+        );
         assert_eq!(
             m.add_bond(AtomId(99), b, BondOrder::Single),
             Err(MolError::BadAtomId)

@@ -27,7 +27,7 @@ pub use tpt_math_units;
 pub const BOHR_ANGSTROM: f64 = 0.529_177_210_544;
 
 /// Hartree energy `Eₕ` in kJ·mol⁻¹.
-pub const HARTREE_KJ_PER_MOL: f64 = 2625.499_639_481;
+pub const HARTREE_KJ_PER_MOL: f64 = 2_625.499_639_481;
 
 /// Hartree energy `Eₕ` in kcal·mol⁻¹.
 pub const HARTREE_KCAL_PER_MOL: f64 = 627.509_474_063_1;
@@ -166,7 +166,11 @@ mod tests {
         // H₂ equilibrium bond length 0.7414 Å in Bohr.
         assert!(close(angstrom_to_bohr(0.7414), 1.401_035, 1e-5));
         // 1 Hartree ≈ 627.5 kcal/mol.
-        assert!(close(hartree_to_kj_per_mol(1.0) * KCAL_PER_KJ, 627.5095, 1e-3));
+        assert!(close(
+            hartree_to_kj_per_mol(1.0) * KCAL_PER_KJ,
+            627.5095,
+            1e-3
+        ));
         // 1 eV in kJ/mol: 96.485.
         assert!(close(HARTREE_KJ_PER_MOL / HARTREE_EV, 96.485332, 1e-5));
     }

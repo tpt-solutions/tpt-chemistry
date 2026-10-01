@@ -273,7 +273,13 @@ impl RyckaertBellemans {
         let n2 = n.norm_sq();
         let kj2 = r_kj.norm_sq();
         if m2 < 1e-24 || n2 < 1e-24 || kj2 < 1e-24 {
-            return (self.energy(phi), Vec3::ZERO, Vec3::ZERO, Vec3::ZERO, Vec3::ZERO);
+            return (
+                self.energy(phi),
+                Vec3::ZERO,
+                Vec3::ZERO,
+                Vec3::ZERO,
+                Vec3::ZERO,
+            );
         }
         let kjn = r_kj.norm();
         let g_i = (kjn / m2) * m;
@@ -282,13 +288,7 @@ impl RyckaertBellemans {
         let b = r_lk.dot(r_kj) / kj2;
         let g_j = -(a + 1.0) * g_i + b * g_l;
         let g_k = -(g_i + g_j + g_l);
-        (
-            self.energy(phi),
-            -dv * g_i,
-            -dv * g_j,
-            -dv * g_k,
-            -dv * g_l,
-        )
+        (self.energy(phi), -dv * g_i, -dv * g_j, -dv * g_k, -dv * g_l)
     }
 }
 
@@ -413,7 +413,10 @@ mod tests {
 
     #[test]
     fn lj_minimum_and_well_depth() {
-        let lj = LennardJones { sigma: 3.4, epsilon: 0.997 };
+        let lj = LennardJones {
+            sigma: 3.4,
+            epsilon: 0.997,
+        };
         let rmin = lj.r_min();
         assert!((rmin - 3.4 * num::powf(2.0, 1.0 / 6.0)).abs() < TOL);
         let (e, f) = lj.energy_and_force(rmin);
@@ -448,15 +451,31 @@ mod tests {
 
     #[test]
     fn pair_potential_superposition() {
-        let p = PairPotential::new(LennardJones { sigma: 3.0, epsilon: 1.0 }, 0.5, -0.2);
+        let p = PairPotential::new(
+            LennardJones {
+                sigma: 3.0,
+                epsilon: 1.0,
+            },
+            0.5,
+            -0.2,
+        );
         let r = 3.3;
-        assert!((p.energy(r) - (p.lj.energy(r) + Coulomb { qa: 0.5, qb: -0.2 }.energy(r))).abs() < 1e-12);
+        assert!(
+            (p.energy(r) - (p.lj.energy(r) + Coulomb { qa: 0.5, qb: -0.2 }.energy(r))).abs()
+                < 1e-12
+        );
     }
 
     #[test]
     fn mixing_lorentz_berthelot() {
-        let a = LennardJones { sigma: 3.0, epsilon: 0.5 };
-        let b = LennardJones { sigma: 4.0, epsilon: 2.0 };
+        let a = LennardJones {
+            sigma: 3.0,
+            epsilon: 0.5,
+        };
+        let b = LennardJones {
+            sigma: 4.0,
+            epsilon: 2.0,
+        };
         let m = LennardJones::mix(&a, &b);
         assert!((m.sigma - 3.5).abs() < TOL);
         assert!((m.epsilon - 1.0).abs() < TOL);
@@ -473,7 +492,10 @@ mod tests {
 
     #[test]
     fn harmonic_angle_gradients_by_finite_difference() {
-        let ang = HarmonicAngle { k: 80.0, theta0: 109.47f64.to_radians() };
+        let ang = HarmonicAngle {
+            k: 80.0,
+            theta0: 109.47f64.to_radians(),
+        };
         let p2 = Vec3::new(0.1, -0.3, 0.2);
         let p1 = p2 + Vec3::new(1.0, 0.4, -0.2);
         let p3 = p2 + Vec3::new(-0.3, 0.8, 0.9);
@@ -502,7 +524,9 @@ mod tests {
     #[test]
     fn rb_dihedral_values_and_gradient() {
         // A classic RB expansion of an OPLS-style torsion (C0..C5).
-        let rb = RyckaertBellemans { c: [0.7, 1.5, 0.3, -0.6, 0.1, 0.0] };
+        let rb = RyckaertBellemans {
+            c: [0.7, 1.5, 0.3, -0.6, 0.1, 0.0],
+        };
         // energy(π) = Σ cₙ (trans state)
         let etrans = rb.energy(core::f64::consts::PI);
         assert!((etrans - 2.0).abs() < 1e-12);
@@ -547,28 +571,52 @@ mod tests {
         let mut ff = ForceField::new();
         let t_c = ff.add_atom_type(
             "CT",
-            LennardJones { sigma: 3.5, epsilon: 0.276 },
+            LennardJones {
+                sigma: 3.5,
+                epsilon: 0.276,
+            },
             -0.18,
             12.011,
         );
         let t_o = ff.add_atom_type(
             "OT",
-            LennardJones { sigma: 3.07, epsilon: 0.65 },
+            LennardJones {
+                sigma: 3.07,
+                epsilon: 0.65,
+            },
             -0.64,
             15.999,
         );
         let t_h = ff.add_atom_type(
             "HC",
-            LennardJones { sigma: 2.5, epsilon: 0.126 },
+            LennardJones {
+                sigma: 2.5,
+                epsilon: 0.126,
+            },
             0.06,
             1.008,
         );
-        ff.set_bond(t_c, t_o, HarmonicBond { k: 1600.0, r0: 1.43 });
-        ff.set_angle(t_c, t_o, t_h, HarmonicAngle { k: 100.0, theta0: 109.5 });
+        ff.set_bond(
+            t_c,
+            t_o,
+            HarmonicBond {
+                k: 1600.0,
+                r0: 1.43,
+            },
+        );
+        ff.set_angle(
+            t_c,
+            t_o,
+            t_h,
+            HarmonicAngle {
+                k: 100.0,
+                theta0: 109.5,
+            },
+        );
         ff.set_dihedral(t_c, t_c, t_o, t_o, RyckaertBellemans { c: [0.6; 6] });
         assert!((ff.bond(t_o, t_c).unwrap().r0 - 1.43).abs() < TOL); // reversed key
         assert!((ff.angle(t_h, t_o, t_c).unwrap().k - 100.0).abs() < TOL); // reversed triple
-        // Reversal normalization: O–O–C–C ≡ C–C–O–O.
+                                                                           // Reversal normalization: O–O–C–C ≡ C–C–O–O.
         assert!(ff.dihedral(t_o, t_o, t_c, t_c).is_some());
         // C–O–H ≠ H–O–C is fine, but C–O–C was never defined.
         assert!(ff.angle(t_c, t_o, t_c).is_none());

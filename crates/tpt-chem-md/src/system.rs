@@ -1,7 +1,6 @@
 //! The MD system state: per-atom positions, velocities, forces, and
 //! parameters, in the MD unit system (Å, fs, amu, kJ·mol⁻¹).
 
-
 use tpt_chem_core::forcefield::LennardJones;
 use tpt_chem_core::rng::Rng;
 use tpt_chem_core::vec3::Vec3;
@@ -161,7 +160,10 @@ mod tests {
     #[test]
     fn thermal_temperature_of_ar_gas() {
         let mut sys = System::new();
-        let lj = LennardJones { sigma: 3.4, epsilon: 0.997 };
+        let lj = LennardJones {
+            sigma: 3.4,
+            epsilon: 0.997,
+        };
         let mut rng = Rng::new(3);
         for i in 0..50 {
             sys.add_atom(lj, 0.0, 39.95, Vec3::new(i as f64 * 6.0, 0.0, 0.0));
@@ -183,7 +185,10 @@ mod tests {
         // = 5e-3 × 1e4 = 50 kJ/mol... but 3N-3 = 0 dof, so T = 0.
         let mut sys = System::new();
         sys.add_atom(
-            LennardJones { sigma: 3.0, epsilon: 0.1 },
+            LennardJones {
+                sigma: 3.0,
+                epsilon: 0.1,
+            },
             0.0,
             1.0,
             Vec3::ZERO,

@@ -6,7 +6,6 @@
 //! each atom's label, and the element is taken from columns 77–78 when
 //! present with a PDB atom-name heuristic as fallback.
 
-
 use tpt_chem_core::element;
 use tpt_chem_core::molecule::{AtomId, BondOrder, Molecule};
 use tpt_chem_core::vec3::Vec3;
@@ -55,7 +54,7 @@ pub fn parse_pdb(text: &str) -> Result<Molecule> {
                         line: Some(line_no),
                     })?
                 } else {
-                    element::from_symbol(&elem_field).ok_or_else(|| IoError::UnknownElement {
+                    element::from_symbol(&elem_field).ok_or(IoError::UnknownElement {
                         format: FORMAT,
                         symbol: elem_field,
                         line: Some(line_no),
@@ -100,7 +99,10 @@ pub fn parse_pdb(text: &str) -> Result<Molecule> {
 }
 
 fn find_serial(serials: &[(i64, AtomId)], serial: i64) -> Option<AtomId> {
-    serials.iter().find(|(s, _)| *s == serial).map(|(_, id)| *id)
+    serials
+        .iter()
+        .find(|(s, _)| *s == serial)
+        .map(|(_, id)| *id)
 }
 
 /// PDB atom-name element heuristic for files missing columns 77–78.
@@ -129,7 +131,11 @@ pub fn element_from_name(name: &str) -> Option<u8> {
 /// Chain `A`, residue `MOL`, residue number 1, occupancy 1.0.
 pub fn write_pdb(mol: &Molecule) -> String {
     let mut out = String::new();
-    out.push_str(&format!("REMARK   {} atoms, {} bonds\n", mol.len(), mol.n_bonds()));
+    out.push_str(&format!(
+        "REMARK   {} atoms, {} bonds\n",
+        mol.len(),
+        mol.n_bonds()
+    ));
     for (i, atom) in mol.atoms().enumerate() {
         let sym = element::symbol(atom.z).unwrap_or("X");
         let name = atom.label.as_deref().unwrap_or(sym);

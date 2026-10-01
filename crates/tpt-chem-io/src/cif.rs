@@ -6,7 +6,6 @@
 //! [`CellParams`] type for fractional→Cartesian conversion; `tpt-chem-crystal`
 //! provides the full lattice machinery for everything beyond that.
 
-
 use tpt_chem_core::element;
 use tpt_chem_core::vec3::Vec3;
 
@@ -196,7 +195,7 @@ pub fn parse_cif(text: &str) -> Result<CifStructure> {
             section: "data_".into(),
         });
     }
-    if cell.iter().any(|&v| v == 0.0) {
+    if cell.contains(&0.0) {
         return Err(IoError::MissingSection {
             format: FORMAT,
             section: "_cell_*".into(),
@@ -237,7 +236,11 @@ fn parse_atom_row(
         return Err(parse_err(
             FORMAT,
             line_no,
-            format!("atom_site row has {} fields, expected {}", tokens.len(), columns.len()),
+            format!(
+                "atom_site row has {} fields, expected {}",
+                tokens.len(),
+                columns.len()
+            ),
         ));
     }
     let col = |name: &str| columns.iter().position(|c| c == name);
@@ -251,7 +254,7 @@ fn parse_atom_row(
         return Ok(()); // loop without the columns we need — skip rows
     };
     let sym = unquote(tokens[i_sym]);
-    let z = element::from_symbol(&sym).ok_or_else(|| IoError::UnknownElement {
+    let z = element::from_symbol(&sym).ok_or(IoError::UnknownElement {
         format: FORMAT,
         symbol: sym,
         line: Some(line_no),

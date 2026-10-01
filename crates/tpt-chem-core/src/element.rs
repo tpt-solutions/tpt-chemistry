@@ -205,7 +205,7 @@ impl<const Z: u8> Element<Z> {
 
 /// Symbol of element `z`, or `None` out of range.
 pub fn symbol(z: u8) -> Option<&'static str> {
-    if z >= 1 && z <= MAX_Z {
+    if (1..=MAX_Z).contains(&z) {
         Some(TABLE[(z - 1) as usize].0)
     } else {
         None
@@ -214,7 +214,7 @@ pub fn symbol(z: u8) -> Option<&'static str> {
 
 /// Name of element `z`, or `None` out of range.
 pub fn name(z: u8) -> Option<&'static str> {
-    if z >= 1 && z <= MAX_Z {
+    if (1..=MAX_Z).contains(&z) {
         Some(TABLE[(z - 1) as usize].1)
     } else {
         None
@@ -223,7 +223,7 @@ pub fn name(z: u8) -> Option<&'static str> {
 
 /// Standard atomic mass [amu] of element `z`, or `None` out of range.
 pub fn mass(z: u8) -> Option<f64> {
-    if z >= 1 && z <= MAX_Z {
+    if (1..=MAX_Z).contains(&z) {
         Some(TABLE[(z - 1) as usize].2)
     } else {
         None
@@ -232,7 +232,7 @@ pub fn mass(z: u8) -> Option<f64> {
 
 /// Covalent radius [Å] of element `z`, or `None` out of range.
 pub fn covalent_radius(z: u8) -> Option<f64> {
-    if z >= 1 && z <= MAX_Z {
+    if (1..=MAX_Z).contains(&z) {
         Some(TABLE[(z - 1) as usize].3)
     } else {
         None
@@ -279,7 +279,7 @@ pub fn hill_formula(counts: &[u8; MAX_Z as usize]) -> String {
         }
     }
     if s.is_empty() {
-        s.push_str("∅");
+        s.push('∅');
     }
     s
 }

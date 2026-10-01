@@ -293,7 +293,12 @@ mod tests {
         let r = 0.9572;
         let th = 104.52f64.to_radians();
         vec![
-            ZMatrixRow { z: 8, dist: None, angle: None, dihedral: None },
+            ZMatrixRow {
+                z: 8,
+                dist: None,
+                angle: None,
+                dihedral: None,
+            },
             ZMatrixRow {
                 z: 1,
                 dist: Some((0, r)),
@@ -327,7 +332,12 @@ mod tests {
         let th = 109.47f64.to_radians();
         let phis = [60f64.to_radians(), -60f64.to_radians(), 180f64.to_radians()];
         let mut rows = vec![
-            ZMatrixRow { z: 6, dist: None, angle: None, dihedral: None },
+            ZMatrixRow {
+                z: 6,
+                dist: None,
+                angle: None,
+                dihedral: None,
+            },
             ZMatrixRow {
                 z: 6,
                 dist: Some((0, r)),
@@ -352,10 +362,7 @@ mod tests {
         }
         let xyz = zmatrix_to_cartesian(&rows).unwrap();
         for i in 1..xyz.len() {
-            assert!(
-                (xyz[i].dist(xyz[i - 1]) - r).abs() < 1e-10,
-                "distance {i}"
-            );
+            assert!((xyz[i].dist(xyz[i - 1]) - r).abs() < 1e-10, "distance {i}");
         }
         for i in 2..xyz.len() {
             let a = angle(xyz[i], xyz[i - 1], xyz[i - 2]);
@@ -365,8 +372,7 @@ mod tests {
             let i = k + 3;
             let d = dihedral(xyz[i - 3], xyz[i - 2], xyz[i - 1], xyz[i]);
             // Wrap-aware angular comparison (−π and +π are the same angle).
-            let diff = (d - phi + core::f64::consts::PI)
-                .rem_euclid(2.0 * core::f64::consts::PI)
+            let diff = (d - phi + core::f64::consts::PI).rem_euclid(2.0 * core::f64::consts::PI)
                 - core::f64::consts::PI;
             assert!(diff.abs() < 1e-9, "dihedral {i}: {d} vs {phi}");
         }
@@ -392,8 +398,18 @@ mod tests {
     fn errors() {
         // Forward reference: row 1 points at atom 3, which does not exist.
         let rows = vec![
-            ZMatrixRow { z: 1, dist: None, angle: None, dihedral: None },
-            ZMatrixRow { z: 1, dist: Some((3, 1.0)), angle: None, dihedral: None },
+            ZMatrixRow {
+                z: 1,
+                dist: None,
+                angle: None,
+                dihedral: None,
+            },
+            ZMatrixRow {
+                z: 1,
+                dist: Some((3, 1.0)),
+                angle: None,
+                dihedral: None,
+            },
         ];
         assert!(matches!(
             zmatrix_to_cartesian(&rows),
@@ -401,8 +417,18 @@ mod tests {
         ));
         // Missing distance on row 1 (row 0 itself needs none).
         let rows = vec![
-            ZMatrixRow { z: 1, dist: None, angle: None, dihedral: None },
-            ZMatrixRow { z: 1, dist: None, angle: None, dihedral: None },
+            ZMatrixRow {
+                z: 1,
+                dist: None,
+                angle: None,
+                dihedral: None,
+            },
+            ZMatrixRow {
+                z: 1,
+                dist: None,
+                angle: None,
+                dihedral: None,
+            },
         ];
         assert!(matches!(
             zmatrix_to_cartesian(&rows),

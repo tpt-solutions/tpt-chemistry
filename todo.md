@@ -18,28 +18,28 @@
 
 (one-time)
 
-- [ ] Root `Cargo.toml` workspace manifest (`resolver = "2"`,
+- [x] Root `Cargo.toml` workspace manifest (`resolver = "2"`,
       `[workspace.package]`: `edition = "2021"`, `rust-version` pinned,
       `license = "MIT OR Apache-2.0"`, `authors = ["TPT Solutions"]`)
-- [ ] `rust-toolchain.toml`
-- [ ] `rustfmt.toml`
-- [ ] `deny.toml` — `[licenses] allow` list restricted to MIT-compatible
+- [x] `rust-toolchain.toml`
+- [x] `rustfmt.toml`
+- [x] `deny.toml` — `[licenses] allow` list restricted to MIT-compatible
       licenses only (MIT, BSD-2-Clause, BSD-3-Clause, ISC, Zlib, CC0-1.0,
       Unicode-3.0, MPL-2.0, etc.) — **do not add bare `Apache-2.0`** to the
       allow-list; only `Apache-2.0` combined with MIT in a dual-license
       expression is acceptable, per spec.txt §2
-- [ ] CI workflow (fmt / clippy / test / deny on push)
-- [ ] `justfile` (common dev commands)
-- [ ] `LICENSE-MIT` + `LICENSE-APACHE`
-- [ ] `CONTRIBUTING.md`
-- [ ] Root `README.md` stub — tpt-chemistry's role (pure-Rust, AI-native
+- [x] CI workflow (fmt / clippy / test / deny on push)
+- [x] `justfile` (common dev commands)
+- [x] `LICENSE-MIT` + `LICENSE-APACHE`
+- [x] `CONTRIBUTING.md`
+- [x] Root `README.md` stub — tpt-chemistry's role (pure-Rust, AI-native
       comp-chem: MD, quantum chemistry, kinetics, crystallography); link to
       `spec.txt`
-- [ ] Rust `.gitignore` (`/target`, etc.)
-- [ ] Create empty `crates/` directory
-- [ ] `git init` (local only — no GitHub remote/push)
-- [ ] Initial commit
-- [ ] Sanity check: `cargo build` succeeds on the empty workspace
+- [x] Rust `.gitignore` (`/target`, etc.)
+- [x] Create empty `crates/` directory
+- [x] `git init` (local only — no GitHub remote/push)
+- [x] Initial commit
+- [x] Sanity check: `cargo build` succeeds on the empty workspace
 
 ## Per-Crate Checklist Template
 

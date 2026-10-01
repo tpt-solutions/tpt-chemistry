@@ -5,7 +5,6 @@
 //! (13 neighbors + the cell itself), giving each unordered pair exactly
 //! once — O(N) work for a fixed cutoff density.
 
-
 use tpt_chem_core::vec3::Vec3;
 
 use crate::box3::Box3;
@@ -74,7 +73,7 @@ impl CellList {
         let target = (positions.len() as f64).cbrt().max(1.0);
         let want = |l: f64| {
             if l > 0.0 {
-                ((l / target).floor() as usize).max(1).min(256)
+                ((l / target).floor() as usize).clamp(1, 256)
             } else {
                 1
             }
@@ -165,8 +164,11 @@ impl CellList {
                                 if di == 0 && dj == 0 && dk == 0 {
                                     continue;
                                 }
-                                let cn =
-                                    self.cell_index(wrap_step(ci, di, nx), wrap_step(cj, dj, ny), wrap_step(ck, dk, nz));
+                                let cn = self.cell_index(
+                                    wrap_step(ci, di, nx),
+                                    wrap_step(cj, dj, ny),
+                                    wrap_step(ck, dk, nz),
+                                );
                                 if cn == c0 || targets[..n_targets].contains(&cn) {
                                     continue;
                                 }

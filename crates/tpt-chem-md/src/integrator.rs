@@ -115,7 +115,10 @@ mod tests {
         // Jittered simple-cubic lattice with ~4.5 Å spacing: no atom
         // overlaps, so the LJ dynamics start in a physically sane state.
         let mut sys = System::new();
-        let lj = LennardJones { sigma: 3.4, epsilon: 0.997 };
+        let lj = LennardJones {
+            sigma: 3.4,
+            epsilon: 0.997,
+        };
         let mut rng = Rng::new(seed);
         let per_axis = (n as f64).cbrt().ceil() as usize;
         let spacing = 4.5;
@@ -157,10 +160,7 @@ mod tests {
         let e1 = sys.total_energy();
         // Relative drift over 0.5 ps must stay tiny for a symplectic
         // integrator at 1 fs.
-        assert!(
-            (e1 - e0).abs() / e0.abs() < 1e-3,
-            "drift: {e0} -> {e1}"
-        );
+        assert!((e1 - e0).abs() / e0.abs() < 1e-3, "drift: {e0} -> {e1}");
     }
 
     #[test]

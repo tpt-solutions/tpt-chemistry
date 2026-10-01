@@ -1,6 +1,5 @@
 //! Force evaluation: Lennard-Jones + Coulomb, plain and via neighbor lists.
 
-
 use tpt_chem_core::forcefield::LennardJones;
 use tpt_chem_core::units::COULOMB_PREFACTOR_KJ_ANG;
 use tpt_chem_core::vec3::Vec3;
@@ -106,7 +105,10 @@ mod tests {
 
     fn argon_dimer(r: f64) -> System {
         let mut sys = System::new();
-        let lj = LennardJones { sigma: 3.4, epsilon: 0.997 };
+        let lj = LennardJones {
+            sigma: 3.4,
+            epsilon: 0.997,
+        };
         sys.add_atom(lj, 0.0, 39.95, Vec3::new(-r / 2.0, 0.0, 0.0));
         sys.add_atom(lj, 0.0, 39.95, Vec3::new(r / 2.0, 0.0, 0.0));
         sys
@@ -121,7 +123,10 @@ mod tests {
         assert!(f[0].x > 0.0);
         assert!(f[1].x < 0.0);
         // Energy = LJ at 4.0 Å.
-        let lj = LennardJones { sigma: 3.4, epsilon: 0.997 };
+        let lj = LennardJones {
+            sigma: 3.4,
+            epsilon: 0.997,
+        };
         assert!((e - lj.energy(r)).abs() < 1e-10);
         // Newton's third law.
         assert!(f[0].x + f[1].x < 1e-14);
@@ -131,20 +136,30 @@ mod tests {
         let e_p = forces_all_pairs(&argon_dimer(r + h), None, None).1;
         let e_m = forces_all_pairs(&argon_dimer(r - h), None, None).1;
         let de_dr = (e_p - e_m) / (2.0 * h);
-        assert!((de_dr + f[1].x).abs() < 1e-5, "dE/dr {de_dr} vs -F {}", -f[1].x);
+        assert!(
+            (de_dr + f[1].x).abs() < 1e-5,
+            "dE/dr {de_dr} vs -F {}",
+            -f[1].x
+        );
     }
 
     #[test]
     fn coulomb_pair() {
         let mut sys = System::new();
         sys.add_atom(
-            LennardJones { sigma: 1.0, epsilon: 0.0 },
+            LennardJones {
+                sigma: 1.0,
+                epsilon: 0.0,
+            },
             1.0,
             1.008,
             Vec3::new(0.0, 0.0, 0.0),
         );
         sys.add_atom(
-            LennardJones { sigma: 1.0, epsilon: 0.0 },
+            LennardJones {
+                sigma: 1.0,
+                epsilon: 0.0,
+            },
             -1.0,
             1.008,
             Vec3::new(2.0, 0.0, 0.0),
@@ -160,7 +175,10 @@ mod tests {
     fn neighbor_list_matches_all_pairs() {
         let box_ = crate::box3::Box3::cubic(15.0);
         let mut sys = System::new();
-        let lj = LennardJones { sigma: 3.4, epsilon: 0.997 };
+        let lj = LennardJones {
+            sigma: 3.4,
+            epsilon: 0.997,
+        };
         let mut rng = tpt_chem_core::rng::Rng::new(7);
         // Jittered lattice so no two atoms overlap.
         let mut placed = 0;

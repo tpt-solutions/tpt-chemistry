@@ -4,7 +4,6 @@
 //! `@<TRIPOS>BOND`. Other sections (`SUBSTRUCTURE`, …) are skipped on
 //! read; only the three above are written.
 
-
 use tpt_chem_core::element;
 use tpt_chem_core::molecule::{BondOrder, Molecule};
 use tpt_chem_core::vec3::Vec3;
@@ -92,13 +91,12 @@ pub fn parse_mol2(text: &str) -> Result<Molecule> {
                 let x = parse_f64(FORMAT, line_no, tokens[2])?;
                 let y = parse_f64(FORMAT, line_no, tokens[3])?;
                 let z = parse_f64(FORMAT, line_no, tokens[4])?;
-                let z_elem = element_from_sybyl(tokens[5]).ok_or_else(|| {
-                    IoError::UnknownElement {
+                let z_elem =
+                    element_from_sybyl(tokens[5]).ok_or_else(|| IoError::UnknownElement {
                         format: FORMAT,
                         symbol: tokens[5].to_string(),
                         line: Some(line_no),
-                    }
-                })?;
+                    })?;
                 let id = mol.add_atom_labeled(z_elem, Vec3::new(x, y, z), tokens[1]);
                 if tokens.len() > 8 {
                     if let Ok(q) = parse_f64(FORMAT, line_no, tokens[8]) {
@@ -249,10 +247,7 @@ USER_CHARGES
     fn bond_orders_map() {
         let text = "@<TRIPOS>MOLECULE\nethene\n2 1\nSMALL\nNO_CHARGES\n\n@<TRIPOS>ATOM\n1 C 0 0 0 C.2 1 R 0.0\n2 C 1.34 0 0 C.2 1 R 0.0\n@<TRIPOS>BOND\n1 1 2 2\n";
         let mol = parse_mol2(text).unwrap();
-        assert_eq!(
-            mol.bonds().next().unwrap().order,
-            BondOrder::Double
-        );
+        assert_eq!(mol.bonds().next().unwrap().order, BondOrder::Double);
     }
 
     #[test]

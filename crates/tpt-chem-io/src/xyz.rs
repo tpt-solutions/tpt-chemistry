@@ -54,7 +54,11 @@ pub fn write_xyz(mol: &Molecule, comment: &str) -> String {
 }
 
 /// Write one frame to a writer (used by the trajectory writer).
-pub(crate) fn write_frame_to<W: Write>(w: &mut W, mol: &Molecule, comment: &str) -> std::io::Result<()> {
+pub(crate) fn write_frame_to<W: Write>(
+    w: &mut W,
+    mol: &Molecule,
+    comment: &str,
+) -> std::io::Result<()> {
     write!(w, "{}\n{}\n", mol.len(), comment)?;
     for atom in mol.atoms() {
         let sym = element::symbol(atom.z).unwrap_or("X");
@@ -84,12 +88,10 @@ pub(crate) fn read_frame<R: BufRead>(reader: &mut R) -> Result<Option<Molecule>>
         }
         break;
     }
-    let natoms: usize = count_line.trim().parse().map_err(|_| {
-        IoError::BadNumber {
-            format: FORMAT,
-            line: None,
-            token: count_line.trim().to_string(),
-        }
+    let natoms: usize = count_line.trim().parse().map_err(|_| IoError::BadNumber {
+        format: FORMAT,
+        line: None,
+        token: count_line.trim().to_string(),
     })?;
 
     let mut comment = String::new();
@@ -131,7 +133,8 @@ pub(crate) fn read_frame<R: BufRead>(reader: &mut R) -> Result<Option<Molecule>>
 mod tests {
     use super::*;
 
-    const WATER: &str = "3\nwater\nO  0.000  0.000  0.117\nH  0.000  0.757 -0.469\nH  0.000 -0.757 -0.469\n";
+    const WATER: &str =
+        "3\nwater\nO  0.000  0.000  0.117\nH  0.000  0.757 -0.469\nH  0.000 -0.757 -0.469\n";
 
     #[test]
     fn parse_write_roundtrip() {
@@ -181,9 +184,6 @@ mod tests {
             Err(IoError::BadNumber { .. })
         ));
         // Empty input.
-        assert!(matches!(
-            parse_xyz(""),
-            Err(IoError::UnexpectedEof { .. })
-        ));
+        assert!(matches!(parse_xyz(""), Err(IoError::UnexpectedEof { .. })));
     }
 }

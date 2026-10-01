@@ -6,7 +6,6 @@
 //! last build — the standard half-skin criterion guaranteeing that no pair
 //! inside the cutoff can be missed.
 
-
 use tpt_chem_core::vec3::Vec3;
 
 use crate::box3::Box3;
