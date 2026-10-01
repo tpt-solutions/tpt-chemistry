@@ -1,0 +1,61 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/tpt-chem-core",
+    "crates/tpt-chem-io",
+    "crates/tpt-chem-md",
+    "crates/tpt-chem-quantum",
+    "crates/tpt-chem-kinetics",
+    "crates/tpt-chem-crystal",
+    "crates/tpt-chem-verify",
+    "crates/tpt-chemistry",
+]
+exclude = []
+
+[workspace.package]
+description = "tpt-chemistry — pure-Rust, AI-native computational chemistry: MD, quantum chemistry, kinetics, crystallography"
+authors = ["TPT Solutions"]
+edition = "2021"
+rust-version = "1.84"
+license = "MIT OR Apache-2.0"
+homepage = "https://github.com/tpt-solutions/tpt-chemistry"
+repository = "https://github.com/tpt-solutions/tpt-chemistry"
+
+[workspace.dependencies]
+# Internal tpt-chem crates.
+tpt-chem-core = { version = "0.1.0", path = "crates/tpt-chem-core", default-features = false }
+tpt-chem-io = { version = "0.1.0", path = "crates/tpt-chem-io" }
+tpt-chem-md = { version = "0.1.0", path = "crates/tpt-chem-md" }
+tpt-chem-quantum = { version = "0.1.0", path = "crates/tpt-chem-quantum" }
+tpt-chem-kinetics = { version = "0.1.0", path = "crates/tpt-chem-kinetics" }
+tpt-chem-crystal = { version = "0.1.0", path = "crates/tpt-chem-crystal" }
+tpt-chem-verify = { version = "0.1.0", path = "crates/tpt-chem-verify" }
+
+# Sibling TPT crates (local path deps; also `MIT OR Apache-2.0`).
+# NOTE: spec.txt §4 names `tpt-dsp` for 3D FFTs, but that repo does not exist
+# (yet); `tpt-math-signal-fft` fills that role per todo.md ("whichever is
+# available/convenient").
+tpt-math-units = { version = "0.1.0", path = "../tpt-math/crates/tpt-math-units", default-features = false }
+tpt-math-numeric = { version = "0.1.0", path = "../tpt-math/crates/tpt-math-numeric", default-features = false }
+tpt-math-linalg = { version = "0.1.0", path = "../tpt-math/crates/tpt-math-linalg" }
+tpt-math-signal-fft = { version = "0.1.0", path = "../tpt-math/crates/tpt-math-signal-fft" }
+
+# External crates — all dual MIT OR Apache-2.0 (no Apache-2.0-only deps,
+# per spec.txt §2 and the workspace `deny.toml`).
+libm = "0.2"
+proptest = "1.7"
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "warn"
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+all = "warn"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+overflow-checks = true

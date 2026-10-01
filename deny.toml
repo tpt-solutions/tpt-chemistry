@@ -1,0 +1,34 @@
+# cargo-deny configuration for tpt-chemistry.
+#
+# License policy (spec.txt §2 "Strict Licensing"): the workspace is dual
+# `MIT OR Apache-2.0`, but the *dependency graph* must not contain any
+# Apache-2.0-ONLY crate. Bare `Apache-2.0` is therefore deliberately absent
+# from the allow-list below — a dual `MIT OR Apache-2.0` expression still
+# passes because the MIT alternative alone satisfies the list. This is
+# tighter than sibling `tpt-math`'s `deny.toml`, which allows bare
+# `Apache-2.0`.
+
+[licenses]
+allow = [
+    "MIT",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "CC0-1.0",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "MPL-2.0",
+    # Used by some low-level Win32/Linux syscall bindings (dual with MIT).
+    # This is NOT bare Apache-2.0 and does not loosen the policy.
+    "Apache-2.0 WITH LLVM-exception",
+]
+confidence-threshold = 0.9
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

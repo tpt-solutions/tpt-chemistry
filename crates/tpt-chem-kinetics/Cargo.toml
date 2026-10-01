@@ -1,0 +1,18 @@
+[package]
+name = "tpt-chem-kinetics"
+description = "Reaction kinetics: mass-action ODEs, Gillespie SSA, Arrhenius and Eyring rate laws"
+keywords = ["chemistry", "kinetics", "gillespie", "reaction-network"]
+categories = ["science"]
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[dependencies]
+tpt-chem-core = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,0 +1,21 @@
+[package]
+name = "tpt-chem-md"
+description = "Classical molecular dynamics: integrators, thermostats, neighbor lists, Ewald/PME electrostatics"
+keywords = ["molecular-dynamics", "chemistry", "simulation", "ewald"]
+categories = ["science"]
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[dependencies]
+tpt-chem-core = { workspace = true }
+# 1D FFTs composed into 3D transforms for Particle Mesh Ewald (stands in for
+# the never-created `tpt-dsp`, see workspace Cargo.toml note).
+tpt-math-signal-fft = { workspace = true }
+
+[lints]
+workspace = true

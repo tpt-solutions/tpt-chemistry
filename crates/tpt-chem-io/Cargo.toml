@@ -1,0 +1,18 @@
+[package]
+name = "tpt-chem-io"
+description = "Chemical file formats: XYZ, PDB, MOL2, CIF readers/writers and trajectory streaming"
+keywords = ["chemistry", "xyz", "pdb", "cif", "mol2"]
+categories = ["science", "parser-implementations"]
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[dependencies]
+tpt-chem-core = { workspace = true }
+
+[lints]
+workspace = true
