@@ -62,6 +62,9 @@ pub const AVOGADRO: f64 = 6.022_140_76e23;
 /// Boltzmann constant `k_B` in J·K⁻¹ (exact, SI 2019).
 pub const BOLTZMANN_J_PER_K: f64 = 1.380_649e-23;
 
+/// Molar gas constant `R = k_B·N_A` in J·mol⁻¹·K⁻¹.
+pub const GAS_CONSTANT_J_PER_MOL_K: f64 = 8.314_462_618;
+
 /// Boltzmann constant `k_B` in kJ·mol⁻¹·K⁻¹ — the form used by MD code.
 pub const BOLTZMANN_KJ_PER_MOL_K: f64 = 8.314_462_618_153_24e-3;
 
