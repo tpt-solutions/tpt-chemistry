@@ -138,9 +138,9 @@ fn solve_linear(a: &[Vec<f64>], b: &[f64]) -> Vec<f64> {
             continue;
         }
         let pivot_row = m[col].clone();
-        for r in (col + 1)..n {
-            let factor = m[r][col] / piv;
-            for (c, mrc) in m[r][col..=n].iter_mut().enumerate() {
+        for row in m.iter_mut().take(n).skip(col + 1) {
+            let factor = row[col] / piv;
+            for (c, mrc) in row[col..=n].iter_mut().enumerate() {
                 *mrc -= factor * pivot_row[col + c];
             }
         }

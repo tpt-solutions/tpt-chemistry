@@ -32,4 +32,5 @@
 //! ```
 
 pub mod conservation;
+pub mod mass_conservation;
 pub mod strategies;

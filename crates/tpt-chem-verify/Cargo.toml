@@ -14,6 +14,7 @@ repository.workspace = true
 [dependencies]
 tpt-chem-core = { workspace = true }
 tpt-chem-md = { workspace = true }
+tpt-chem-kinetics = { workspace = true }
 proptest = { workspace = true }
 
 [lints]
