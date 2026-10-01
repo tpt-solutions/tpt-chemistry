@@ -39,6 +39,18 @@ impl AtomId {
     }
 }
 
+impl From<u16> for AtomId {
+    fn from(v: u16) -> Self {
+        AtomId(v)
+    }
+}
+
+impl From<usize> for AtomId {
+    fn from(v: usize) -> Self {
+        AtomId(v as u16)
+    }
+}
+
 /// Chemical bond order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BondOrder {
@@ -234,6 +246,11 @@ impl Molecule {
     /// Borrow atom `id`.
     pub fn atom(&self, id: AtomId) -> &Atom {
         &self.atoms[id.index()]
+    }
+
+    /// Borrow atom by list position, or `None` out of range.
+    pub fn get_atom(&self, i: usize) -> Option<&Atom> {
+        self.atoms.get(i)
     }
 
     /// Mutable borrow of atom `id`.

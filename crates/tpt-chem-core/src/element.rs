@@ -269,6 +269,8 @@ pub fn hill_formula(counts: &[u8; MAX_Z as usize]) -> String {
             out.push((symbol(z).unwrap_or("?"), n));
         }
     }
+    // Hill order: C and H first, the rest alphabetical by symbol.
+    out[if carbon > 0 { 1 } else { 0 }..].sort_by(|a, b| a.0.cmp(b.0));
     let mut s = String::new();
     for (sym, n) in out {
         s.push_str(sym);
