@@ -71,7 +71,7 @@ pub fn oscillator_area_ratio(dt: f64, steps: usize, omega: f64) -> f64 {
         dpp = half_kick(dpp, dqp, omega, dt);
         dpq = half_kick(dpq, dqq, omega, dt);
     }
-    
+
     dqq * dpp - dpq * dqp
 }
 

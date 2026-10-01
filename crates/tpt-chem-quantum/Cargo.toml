@@ -13,7 +13,12 @@ repository.workspace = true
 
 [dependencies]
 tpt-chem-core = { workspace = true }
-tpt-math-linalg = { workspace = true }
+# NOTE: spec.txt §4 says HF "relies on tpt-math for dense eigenvalue
+# decomposition", but `tpt-math-linalg-dense` exposes no eigensolver and
+# `nalgebra` is Apache-2.0-only (banned by the workspace license policy).
+# The Roothaan-Hall equations are therefore solved by a from-scratch cyclic
+# Jacobi eigensolver in this crate (see `linalg.rs`), consistent with
+# spec.txt §2's from-scratch philosophy.
 
 [lints]
 workspace = true

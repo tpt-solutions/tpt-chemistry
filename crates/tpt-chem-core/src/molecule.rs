@@ -398,13 +398,14 @@ impl Molecule {
         for i in 0..n {
             for j in (i + 1)..n {
                 let d = self.atoms[i].pos.dist(self.atoms[j].pos);
-                if d > 0.4 && d < tolerance * (radii[i] + radii[j])
+                if d > 0.4
+                    && d < tolerance * (radii[i] + radii[j])
                     && self
                         .add_bond(AtomId(i as u16), AtomId(j as u16), BondOrder::Single)
                         .is_ok()
-                    {
-                        added += 1;
-                    }
+                {
+                    added += 1;
+                }
             }
         }
         added
