@@ -6,7 +6,6 @@
 //! `G_μν = Σ_λσ D_λσ [(μν|λσ) − ½(μλ|νσ)]`; the total energy is
 //! `E = ½Σ_μν D_μν (H_μν + F_μν) + E_nuc`.
 
-use tpt_chem_core::element;
 use tpt_chem_core::molecule::Molecule;
 use tpt_chem_core::num;
 use tpt_chem_core::units::angstrom_to_bohr;
@@ -40,7 +39,6 @@ impl core::fmt::Display for HfError {
     }
 }
 
-#[cfg(feature = "std")]
 impl std::error::Error for HfError {}
 
 /// Result of a converged restricted HF calculation.

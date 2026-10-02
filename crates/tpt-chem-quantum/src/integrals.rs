@@ -233,7 +233,6 @@ fn raise_family(
     // transfer (0, b) = (1, b-1) - AB*(0, b-1) needs one raising step
     // beyond `la` even when `la == 0`. Consumers only read |a| <= la.
     let a_gen = all_components_up_to(la + 1);
-    let a_comps = all_components_up_to(la);
     let b_comps = all_components_up_to(lb);
     let mut v = vec![vec![vec![0.0f64; max_m + 1]; b_comps.len()]; a_gen.len()];
     v[0][0].copy_from_slice(base);
@@ -334,30 +333,6 @@ fn raise_family(
     v
 }
 
-/// Primitive nuclear-attraction integral `⟨a|−Z/r_C|b⟩` (without the −Z
-/// factor) for all components up to `(la, lb)`:
-/// base `(00)^m = (2π/p)·K_ab·F_m(T)`, `T = p|P−C|²`, `W = P`, and the
-/// lowering factor is the `q→∞` limit `1`.
-fn nuclear_primitive(pair: &Pair, c: Vec3, la: u8, lb: u8) -> Vec<Vec<f64>> {
-    let max_m = (la + lb) as usize;
-    let t = pair.p * (pair.center - c).norm_sq();
-    let boys = boys_array(t, max_m);
-    let base: Vec<f64> = boys
-        .iter()
-        .map(|&f| 2.0 * core::f64::consts::PI / pair.p * pair.kab * f)
-        .collect();
-    let tables = raise_family(la, lb, pair.p, pair.pa, pair.ab, Vec3::ZERO, 1.0, &base);
-    let a_comps = all_components_up_to(la);
-    let b_comps = all_components_up_to(lb);
-    let mut out = vec![vec![0.0; b_comps.len()]; a_comps.len()];
-    for (ia, _) in a_comps.iter().enumerate() {
-        for (ib, _) in b_comps.iter().enumerate() {
-            out[ia][ib] = tables[ia][ib][0];
-        }
-    }
-    out
-}
-
 /// Primitive ERI `(ab|cd)` for all component combinations, via the
 /// Obara-Saika two-electron recursion: electron 1 is raised first
 /// (`V1[a][b]` with `c = d = 0`), then electron 2 per `(a, b)` pair.
@@ -435,11 +410,6 @@ fn eri_primitive(
         }
     }
     out
-}
-
-/// `P - B` on the given axis.
-fn pb_of(pair: &Pair, axis: usize) -> f64 {
-    pair.pa.get(axis) - pair.ab.get(axis)
 }
 
 fn total(c: (u8, u8, u8)) -> u8 {
@@ -935,8 +905,8 @@ mod dbg_v {
         let mut sh = Shell::new(1, c, vec![(alpha, 1.0)]);
         sh.normalize();
         println!("shell_norm = {}", sh.normalizations[0]);
-        let pi = Prim { alpha, coeff: 1.0 };
-        let pj = Prim { alpha, coeff: 1.0 };
+        let _pi = Prim { alpha, coeff: 1.0 };
+        let _pj = Prim { alpha, coeff: 1.0 };
         let pair = make_pair(alpha, c, alpha, c);
         println!(
             "p = {}, kab = {}, pa = {:?}",

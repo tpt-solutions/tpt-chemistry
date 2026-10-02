@@ -29,7 +29,6 @@ impl core::fmt::Display for LinError {
     }
 }
 
-#[cfg(feature = "std")]
 impl std::error::Error for LinError {}
 
 /// Eigen-decompose a symmetric row-major `n × n` matrix.

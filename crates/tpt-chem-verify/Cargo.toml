@@ -17,5 +17,10 @@ tpt-chem-md = { workspace = true }
 tpt-chem-kinetics = { workspace = true }
 proptest = { workspace = true }
 
-[lints]
-workspace = true
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(kani)'] }
+
+[lints.clippy]
+all = "warn"

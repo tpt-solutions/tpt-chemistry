@@ -67,7 +67,6 @@ impl core::fmt::Display for BasisError {
     }
 }
 
-#[cfg(feature = "std")]
 impl std::error::Error for BasisError {}
 
 /// Build the minimal STO-3G basis for one atom of element `z` at `center`

@@ -33,6 +33,7 @@
 
 pub mod conservation;
 pub mod mass_conservation;
+#[allow(unexpected_cfgs)]
 #[cfg(kani)]
-pub mod proofs;
+pub mod proofs; // Kani-only: run via `cargo kani` on Linux
 pub mod strategies;
