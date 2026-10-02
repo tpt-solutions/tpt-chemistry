@@ -75,6 +75,7 @@ fn prims(shell: &Shell) -> Vec<Prim> {
 /// Per-axis primitive overlap tables. Axis table `s[i][j]` covers
 /// `i ≤ la+1` (the extra row feeds horizontal transfers) and `j ≤ jmax`,
 /// with `s[0][0] = exp(−αβ/p·Δ²)` on that axis.
+#[allow(clippy::needless_range_loop)]
 fn overlap_tables(alpha: f64, beta: f64, pair: &Pair, la: u8, jmax: u8) -> [Vec<Vec<f64>>; 3] {
     let mut tables: [Vec<Vec<f64>>; 3] = Default::default();
     for axis in 0..3 {
@@ -218,6 +219,7 @@ pub fn kinetic_shell(a: &Shell, b: &Shell) -> Vec<Vec<f64>> {
 ///   + a/(2p)·[V(a−1,b)^m − R·V(a−1,b)^{m+1}]
 ///   + b/(2p)·[V(a,b−1)^m − R·V(a,b−1)^{m+1}]`
 /// * horizontal: `(a, b+1) = (a+1, b) − AB·(a, b)`
+#[allow(clippy::too_many_arguments, clippy::needless_range_loop)]
 fn raise_family(
     la: u8,
     lb: u8,
@@ -246,7 +248,7 @@ fn raise_family(
             .expect("component generated earlier")
     };
 
-    for t in 1..=(total((la, 0, 0)) + total((0, lb, 0))) as u16 {
+    for t in 1..=(total((la, 0, 0)) + total((0, lb, 0))) {
         // Phase 1: raising cases (a ≠ 0).
         for (ia, &a) in a_gen.iter().enumerate() {
             for (ib, &b) in b_comps.iter().enumerate() {
@@ -336,6 +338,7 @@ fn raise_family(
 /// Primitive ERI `(ab|cd)` for all component combinations, via the
 /// Obara-Saika two-electron recursion: electron 1 is raised first
 /// (`V1[a][b]` with `c = d = 0`), then electron 2 per `(a, b)` pair.
+#[allow(clippy::needless_range_loop)]
 fn eri_primitive(
     pair1: &Pair,
     pair2: &Pair,
@@ -470,6 +473,7 @@ fn hermite_coeffs_1d(
             e[i + 1][0][t] = v;
         }
     }
+    #[allow(clippy::needless_range_loop)]
     for i in 0..=i_max {
         for j in 0..j_max {
             for t in 0..=t_max {
@@ -543,6 +547,7 @@ fn hermite_coulomb_r(
 /// `m = 0` nuclear-attraction integral for one component pair via
 /// McMurchie-Davidson. Carries the `-Z` attraction convention (negative for
 /// positive `Z`); the caller multiplies by the charge.
+#[allow(clippy::only_used_in_recursion)]
 fn nuclear_value(
     pair: &Pair,
     c: Vec3,
@@ -552,14 +557,18 @@ fn nuclear_value(
     comp_b: (u8, u8, u8),
 ) -> f64 {
     // The i-raise path is the validated one; canonicalize so the
-    // higher-momentum side is always the a-side.
+    // higher-momentum side is always the a-side. (The recursion is
+    // depth-1: after the flip the higher side is always a-side.)
     let ta = u16::from(comp_a.0) + u16::from(comp_a.1) + u16::from(comp_a.2);
     let tb = u16::from(comp_b.0) + u16::from(comp_b.1) + u16::from(comp_b.2);
     if tb > ta {
-        let a_center = pair.center - pair.pa;
-        let b_center = a_center - pair.ab;
-        let flipped = make_pair(pair.beta, b_center, pair.alpha, a_center);
-        return nuclear_value(&flipped, c, lb, la, comp_b, comp_a);
+        #[allow(clippy::only_used_in_recursion)]
+        return {
+            let a_center = pair.center - pair.pa;
+            let b_center = a_center - pair.ab;
+            let flipped = make_pair(pair.beta, b_center, pair.alpha, a_center);
+            nuclear_value(&flipped, c, lb, la, comp_b, comp_a)
+        };
     }
     let p = pair.p;
     let pa = pair.pa; // P - A

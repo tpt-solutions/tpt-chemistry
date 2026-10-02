@@ -123,6 +123,21 @@ impl Shell {
     }
 }
 
+/// All Cartesian components `(ix, iy, iz)` with `ix + iy + iz <= l`,
+/// ordered by increasing total angular momentum (the intermediate
+/// components the OS recurrences walk through).
+pub fn all_components_up_to(l: u8) -> Vec<(u8, u8, u8)> {
+    let mut out = Vec::new();
+    for t in 0..=l {
+        for ix in 0..=t {
+            for iy in 0..=(t - ix) {
+                out.push((ix, iy, t - ix - iy));
+            }
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -181,19 +196,4 @@ mod tests {
         }
         assert!((n * n * s - 1.0).abs() < 1e-12);
     }
-}
-
-/// All Cartesian components `(ix, iy, iz)` with `ix + iy + iz <= l`,
-/// ordered by increasing total angular momentum (the intermediate
-/// components the OS recurrences walk through).
-pub fn all_components_up_to(l: u8) -> Vec<(u8, u8, u8)> {
-    let mut out = Vec::new();
-    for t in 0..=l {
-        for ix in 0..=t {
-            for iy in 0..=(t - ix) {
-                out.push((ix, iy, t - ix - iy));
-            }
-        }
-    }
-    out
 }

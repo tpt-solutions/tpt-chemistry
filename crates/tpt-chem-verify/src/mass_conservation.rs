@@ -7,7 +7,6 @@
 use std::vec::Vec;
 
 use tpt_chem_kinetics::network::ReactionNetwork;
-use tpt_chem_kinetics::solver;
 
 /// Total weighted mass `Σ m_i x_i` of a state vector given per-species
 /// molar masses (any positive masses work: conservation is a property of
@@ -54,7 +53,9 @@ pub fn sample_networks() -> Vec<(ReactionNetwork, Vec<f64>)> {
 mod tests {
     use super::*;
     use proptest::prelude::*;
-    
+    use tpt_chem_core::rng::Rng;
+    use tpt_chem_kinetics::solver;
+
     #[test]
     fn rk4_conserves_total_mass() {
         for (net, masses) in sample_networks() {
@@ -115,7 +116,7 @@ mod tests {
     fn ssa_conserves_total_mass_per_event() {
         // Hydrogenation: H2 + O → H2O keeps total mass fixed per event.
         let (net, masses) = sample_networks()[2].clone();
-        let mut rng = tpt_chem_core::rng::Rng::new(4242);
+        let mut rng = Rng::new(4242);
         let y0 = [2.0, 2.0, 0.0];
         let m0 = total_mass(&masses, &y0);
         for _ in 0..50 {

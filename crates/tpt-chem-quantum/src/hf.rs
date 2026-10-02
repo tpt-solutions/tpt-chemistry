@@ -142,6 +142,7 @@ pub fn rhf(mol: &Molecule) -> Result<HfResult, HfError> {
                     let n_mu = cartesian_components(omu.l).len();
                     let n_nu = cartesian_components(onu.l).len();
                     let n_la = cartesian_components(ola.l).len();
+                    #[allow(clippy::needless_range_loop)]
                     for cu in 0..n_mu {
                         for cv in 0..n_nu {
                             for cw in 0..n_la {
