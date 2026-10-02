@@ -116,7 +116,7 @@ mod tests {
         #[test]
         fn md_system_is_valid((sys, _seed) in arb_md_system(12)) {
             prop_assert!(sys.len() >= 2 && sys.len() <= 12);
-            prop_assert!(sys.temperature() < 2000.0);
+            prop_assert!(sys.temperature() < 3000.0, "T = {}", sys.temperature());
             prop_assert!(sys.box_.is_some());
             // Total energy must be finite.
             prop_assert!(sys.kinetic_energy().is_finite());

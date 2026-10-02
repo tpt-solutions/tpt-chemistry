@@ -63,14 +63,28 @@ just kani       # bounded model checking (Linux/WSL only)
 ```
 
 ```rust
-use tpt_chem_core::element::Element;
-use tpt_chem_core::molecule::Molecule;
+use tpt_chem_core::molecule::{BondOrder, Molecule};
 
 let mut mol = Molecule::new("H2");
 let h1 = mol.add_atom::<2>([0.0, 0.0, 0.0].into());
 let h2 = mol.add_atom::<2>([0.0, 0.0, 0.74].into());
-mol.add_bond(h1, h2, 1);
-assert_eq!(mol.mass(), Element::<2>::mass() * 2.0);
+mol.add_bond(h1, h2, BondOrder::Single).unwrap();
+assert_eq!(mol.mass(), 2.0 * 1.008);
+```
+
+Hartree–Fock for H₂ at R = 1.4 Bohr (STO-3G, lit. −1.11676 Eₕ):
+
+```rust
+use tpt_chem_core::molecule::Molecule;
+use tpt_chem_core::units::BOHR_ANGSTROM;
+use tpt_chem_core::vec3::Vec3;
+use tpt_chem_quantum::hf::rhf_energy;
+
+let mut h2 = Molecule::new("H2");
+let r = 1.4 * BOHR_ANGSTROM;
+h2.add_atom::<1>(Vec3::new(0.0, 0.0, -r / 2.0));
+h2.add_atom::<1>(Vec3::new(0.0, 0.0, r / 2.0));
+assert!((rhf_energy(&h2).unwrap() - (-1.11675931)).abs() < 5e-4);
 ```
 
 ## License

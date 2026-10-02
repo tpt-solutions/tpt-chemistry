@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc ba5b9c18d94dcc58f5d45a53a45f1c06b3c16c6768bad811ea97b5112d5cfa85 # shrinks to (sys, _seed) = (System { pos: [Vec3 { x: 2.4427529707268025, y: 2.355443569689617, z: 2.358365502835798 }, Vec3 { x: 2.0011632924025555, y: 2.1787155588196576, z: 6.768039302947158 }], vel: [Vec3 { x: 0.03526147428878126, y: -0.014478702928824366, z: -0.04494278803798768 }, Vec3 { x: -0.03526147428878126, y: 0.014478702928824364, z: 0.04494278803798768 }], force: [Vec3 { x: 0.0, y: 0.0, z: 0.0 }, Vec3 { x: 0.0, y: 0.0, z: 0.0 }], lj: [LennardJones { sigma: 2.5, epsilon: 0.05 }, LennardJones { sigma: 2.5, epsilon: 0.05 }], charge: [0.0, 0.0], mass: [1.0, 1.0], names: ["", ""], box_: Some(Box3 { length: Vec3 { x: 13.0, y: 13.0, z: 13.0 } }), potential_energy: 0.0 }, 9595204890720850527)
