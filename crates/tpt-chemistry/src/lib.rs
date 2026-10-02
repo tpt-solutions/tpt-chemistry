@@ -30,16 +30,16 @@
 
 #[cfg(feature = "core")]
 pub use tpt_chem_core;
+#[cfg(feature = "crystal")]
+pub use tpt_chem_crystal;
 #[cfg(feature = "io")]
 pub use tpt_chem_io;
+#[cfg(feature = "kinetics")]
+pub use tpt_chem_kinetics;
 #[cfg(feature = "md")]
 pub use tpt_chem_md;
 #[cfg(feature = "quantum")]
 pub use tpt_chem_quantum;
-#[cfg(feature = "kinetics")]
-pub use tpt_chem_kinetics;
-#[cfg(feature = "crystal")]
-pub use tpt_chem_crystal;
 #[cfg(feature = "verify")]
 pub use tpt_chem_verify;
 

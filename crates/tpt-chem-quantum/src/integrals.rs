@@ -572,7 +572,7 @@ fn nuclear_value(
     }
     let p = pair.p;
     let pa = pair.pa; // P - A
-    let pb = pa - pair.ab; // P - B
+    let pb = pa + pair.ab; // P-B = (P-A) + (A-B)
     let i_ax = [comp_a.0 as usize, comp_a.1 as usize, comp_a.2 as usize];
     let j_ax = [comp_b.0 as usize, comp_b.1 as usize, comp_b.2 as usize];
     let t_max = i_ax[0] + j_ax[0] + i_ax[1] + j_ax[1] + i_ax[2] + j_ax[2];
