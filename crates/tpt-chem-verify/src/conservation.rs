@@ -43,7 +43,7 @@ pub fn assert_energy_conserved(sys: &mut System, steps: usize, dt: f64, rel_tol:
 /// Returns the phase-space area enclosed by the trajectory after `steps`
 /// VV steps of the 2D oscillator, relative to the initial area. Symplectic
 /// maps preserve this area exactly (up to floating point) — the property
-/// tested by [`phase_space_area_preserved`].
+/// tested by the `phase_space_area_preserved` proptest.
 pub fn oscillator_area_ratio(dt: f64, steps: usize, omega: f64) -> f64 {
     // Phase point (q, p) evolved by the exact VV map of H = p²/2 + ω²q²/2.
     // The VV map for the harmonic oscillator is a linear map with

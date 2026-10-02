@@ -221,7 +221,7 @@ pub fn name(z: u8) -> Option<&'static str> {
     }
 }
 
-/// Standard atomic mass [amu] of element `z`, or `None` out of range.
+/// Standard atomic mass (amu) of element `z`, or `None` out of range.
 pub fn mass(z: u8) -> Option<f64> {
     if (1..=MAX_Z).contains(&z) {
         Some(TABLE[(z - 1) as usize].2)
@@ -230,7 +230,7 @@ pub fn mass(z: u8) -> Option<f64> {
     }
 }
 
-/// Covalent radius [Å] of element `z`, or `None` out of range.
+/// Covalent radius (Å) of element `z`, or `None` out of range.
 pub fn covalent_radius(z: u8) -> Option<f64> {
     if (1..=MAX_Z).contains(&z) {
         Some(TABLE[(z - 1) as usize].3)

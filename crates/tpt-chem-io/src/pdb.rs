@@ -188,7 +188,7 @@ pub fn write_pdb_with_orders(mol: &Molecule) -> Result<String> {
     Ok(out)
 }
 
-/// Convenience: parse ignoring [`MolError`]s from duplicate CONECT lines.
+/// Convenience: parse ignoring duplicate-bond errors from CONECT lines.
 pub fn parse_pdb_lenient(text: &str) -> Result<Molecule> {
     parse_pdb(text)
 }
