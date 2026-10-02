@@ -37,10 +37,16 @@
 
 pub mod box3;
 pub mod cell;
+pub mod ewald;
 pub mod forces;
 pub mod integrator;
 pub mod neighbors;
 pub mod system;
+pub mod thermostat;
+
+pub use thermostat::{
+    berendsen_barostat, berendsen_thermostat, langevin_step, nose_hoover_step, Leapfrog,
+};
 
 /// Conversion factor: kinetic energy per particle in
 /// amu·Å²·fs⁻² to kJ·mol⁻¹ (`= amu·(10⁵ m·s⁻¹)²·N_A/1000`).
