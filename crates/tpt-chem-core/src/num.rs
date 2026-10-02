@@ -151,6 +151,18 @@ pub fn acos(x: f64) -> f64 {
     }
 }
 
+/// arcsin x.
+pub fn asin(x: f64) -> f64 {
+    #[cfg(feature = "std")]
+    {
+        x.clamp(-1.0, 1.0).asin()
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        libm::asin(x.clamp(-1.0, 1.0))
+    }
+}
+
 /// Fused multiply-add `x * a + b`.
 pub fn fma(x: f64, a: f64, b: f64) -> f64 {
     x * a + b
@@ -171,6 +183,7 @@ mod tests {
         assert!((sin(core::f64::consts::FRAC_PI_2) - 1.0).abs() < 1e-15);
         assert!((atan2(1.0, 1.0) - core::f64::consts::FRAC_PI_4).abs() < 1e-15);
         assert!((acos(1.0)).abs() < 1e-15);
+        assert!((asin(1.0) - core::f64::consts::FRAC_PI_2).abs() < 1e-15);
         assert!((fma(3.0, 2.0, 1.0) - 7.0).abs() < 1e-15);
     }
 }
