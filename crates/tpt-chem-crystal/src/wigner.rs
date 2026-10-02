@@ -64,11 +64,7 @@ impl WignerSeitzCell {
                     if i == 0 && j == 0 && k == 0 {
                         continue;
                     }
-                    points.push(
-                        recip.a * i as f64
-                            + recip.b * j as f64
-                            + recip.c * k as f64,
-                    );
+                    points.push(recip.a * i as f64 + recip.b * j as f64 + recip.c * k as f64);
                 }
             }
         }
@@ -103,19 +99,13 @@ impl WignerSeitzCell {
                                 .iter()
                                 .all(|f| f.outside_by(v) < 1e-7 * (1.0 + f.offset.abs().sqrt()));
                             let inside_dbg = std::env::var("TPT_DBG").is_ok();
-                            if inside_dbg
-                                && v.x.abs() > 0.7
-                                && v.y.abs() > 0.7
-                                && v.z.abs() > 0.7
-                            {
+                            if inside_dbg && v.x.abs() > 0.7 && v.y.abs() > 0.7 && v.z.abs() > 0.7 {
                                 eprintln!(
                                     "GEN ({:.6},{:.6},{:.6}) inside={}",
                                     v.x, v.y, v.z, inside
                                 );
                             }
-                            if inside
-                                && !vertices.iter().any(|u| (*u - v).norm() < 1e-7)
-                            {
+                            if inside && !vertices.iter().any(|u| (*u - v).norm() < 1e-7) {
                                 vertices.push(v);
                             }
                         }
@@ -182,8 +172,7 @@ impl WignerSeitzCell {
                 continue;
             }
             let normal = f.normal.normalize();
-            let center =
-                on_face.iter().fold(Vec3::ZERO, |a, v| a + *v) / on_face.len() as f64;
+            let center = on_face.iter().fold(Vec3::ZERO, |a, v| a + *v) / on_face.len() as f64;
             let u0 = (on_face[0] - center).normalize();
             let u1 = normal.cross(u0);
             let mut sorted = on_face.clone();

@@ -71,18 +71,17 @@ fn cromer_mann(z: u8) -> Option<CromerMann> {
     }
 }
 
-
 /// Atomic form factor `f(G)` for an element at scattering magnitude
 /// `s = sinθ/λ` (Cromer-Mann): `f = Σ aᵢ exp(−bᵢ s²) + c`.
 pub fn form_factor(z: u8, s: f64) -> f64 {
     match cromer_mann(z) {
-        Some(cm) => cm
-            .a
-            .iter()
-            .zip(&cm.b)
-            .map(|(&a, &b)| a * num::exp(-b * s * s))
-            .sum::<f64>()
-            + cm.c,
+        Some(cm) => {
+            cm.a.iter()
+                .zip(&cm.b)
+                .map(|(&a, &b)| a * num::exp(-b * s * s))
+                .sum::<f64>()
+                + cm.c
+        }
         None => z as f64, // fallback: atomic number
     }
 }
@@ -134,7 +133,6 @@ impl XrdSimulator {
     /// Simulate the powder pattern; reflections sorted by 2θ with
     /// intensities normalized to the strongest.
     pub fn simulate(&self, lat: &Lattice, structure: &CrystalStructure) -> Vec<Reflection> {
-        let recip = lat.reciprocal_no_2pi();
         let mut raw: Vec<(Miller, f64, f64, f64)> = Vec::new(); // (miller, d, 2θ, |F|²)
 
         for h in -self.max_index..=self.max_index {
@@ -155,7 +153,10 @@ impl XrdSimulator {
                     let s = num::sin(theta_from_two_theta(two_theta)) / self.wavelength;
                     let mut f_re = 0.0;
                     let mut f_im = 0.0;
-                    for (z, r_frac) in structure.atomic_numbers.iter().zip(&structure.frac_positions)
+                    for (z, r_frac) in structure
+                        .atomic_numbers
+                        .iter()
+                        .zip(&structure.frac_positions)
                     {
                         let pos = lat.to_cartesian(*r_frac);
                         // Phase: 2π g·r with g in cycles/Å (no 2π convention).
@@ -191,7 +192,14 @@ impl XrdSimulator {
             match merged.last_mut() {
                 Some(last) if (last.2 - tt).abs() < 1e-4 => {
                     last.3 += inten;
-                    if m.h + m.k + m.l > last.0.h + last.0.k + last.0.l {
+                    // Prefer the family member with the largest h+k+l,
+                    // breaking ties lexicographically ((2 2 0) beats (0 2 2)).
+                    let cand_sum = m.h + m.k + m.l;
+                    let last_sum = last.0.h + last.0.k + last.0.l;
+                    if cand_sum > last_sum
+                        || (cand_sum == last_sum
+                            && (m.h, m.k, m.l) > (last.0.h, last.0.k, last.0.l))
+                    {
                         last.0 = m;
                     }
                 }
@@ -263,11 +271,19 @@ mod tests {
             .iter()
             .find(|p| p.miller == Miller::new(1, 1, 1))
             .expect("111 present");
-        assert!((p111.two_theta - 28.44).abs() < 0.3, "2θ = {}", p111.two_theta);
+        assert!(
+            (p111.two_theta - 28.44).abs() < 0.3,
+            "2θ = {}",
+            p111.two_theta
+        );
 
         // Extinction rules for diamond-cubic (fcc + glide):
         // (100) forbidden, (110) forbidden, (200) forbidden.
-        for forbidden in [Miller::new(1, 0, 0), Miller::new(1, 1, 0), Miller::new(2, 0, 0)] {
+        for forbidden in [
+            Miller::new(1, 0, 0),
+            Miller::new(1, 1, 0),
+            Miller::new(2, 0, 0),
+        ] {
             assert!(
                 !peaks.iter().any(|p| p.miller == forbidden),
                 "{forbidden:?} must be forbidden"
@@ -279,7 +295,11 @@ mod tests {
             .iter()
             .find(|p| p.miller == Miller::new(2, 2, 0))
             .expect("220 present");
-        assert!((p220.two_theta - 47.3).abs() < 0.4, "2θ = {}", p220.two_theta);
+        assert!(
+            (p220.two_theta - 47.3).abs() < 0.4,
+            "2θ = {}",
+            p220.two_theta
+        );
         assert!(p220.intensity > 0.4, "220 strong: {}", p220.intensity);
 
         // (111) is the strongest peak.
@@ -313,7 +333,11 @@ mod tests {
         };
         let peaks = sim.simulate(&lat, &structure);
         // fcc: mixed-index reflections forbidden.
-        for forbidden in [Miller::new(1, 0, 0), Miller::new(1, 1, 0), Miller::new(2, 1, 0)] {
+        for forbidden in [
+            Miller::new(1, 0, 0),
+            Miller::new(1, 1, 0),
+            Miller::new(2, 1, 0),
+        ] {
             assert!(!peaks.iter().any(|p| p.miller == forbidden));
         }
         // (111) and (200) present.

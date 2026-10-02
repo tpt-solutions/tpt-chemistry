@@ -98,10 +98,10 @@ mod tests {
     fn monkhorst_pack_2x_shifts_off_gamma() {
         let g = KGrid::monkhorst_pack([2, 2, 2]);
         // 2×2×2 MP points sit at (±1/4, ±1/4, ±1/4).
-        assert!(g.points.iter().all(|p| p
-            .frac
+        assert!(g
+            .points
             .iter()
-            .all(|&v| (v.abs() - 0.25).abs() < 1e-12)));
+            .all(|p| p.frac.iter().all(|&v| (v.abs() - 0.25).abs() < 1e-12)));
     }
 
     #[test]

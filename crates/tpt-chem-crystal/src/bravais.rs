@@ -105,18 +105,18 @@ impl Lattice {
     /// General triclinic lattice from edge lengths and angles (degrees).
     pub fn triclinic(a: f64, b: f64, c: f64, alpha: f64, beta: f64, gamma: f64) -> Self {
         // Convention: c along z; b in the xz-plane; a general.
-        let (al, be, ga) = (
-            alpha.to_radians(),
-            beta.to_radians(),
-            gamma.to_radians(),
-        );
+        let (al, be, ga) = (alpha.to_radians(), beta.to_radians(), gamma.to_radians());
         let va = Vec3::new(a, 0.0, 0.0);
         let vb = Vec3::new(b * ga.cos(), b * ga.sin(), 0.0);
         let cx = c * be.cos();
         let cy = c * (al.cos() - be.cos() * ga.cos()) / ga.sin();
         let cz2 = c * c - cx * cx - cy * cy;
         let vc = Vec3::new(cx, cy, cz2.max(0.0).sqrt());
-        Lattice { a: va, b: vb, c: vc }
+        Lattice {
+            a: va,
+            b: vb,
+            c: vc,
+        }
     }
 
     /// Cell volume (Å³), signed positive.
@@ -171,9 +171,7 @@ impl Lattice {
     pub fn classify(&self, tol: f64) -> Bravais {
         let (la, lb, lc) = (self.a.norm(), self.b.norm(), self.c.norm());
         let eq = |x: f64, y: f64| (x - y).abs() <= tol * x.max(y).max(1e-12);
-        let angle = |u: Vec3, v: Vec3| {
-            num::acos(u.dot(v) / (u.norm() * v.norm())).to_degrees()
-        };
+        let angle = |u: Vec3, v: Vec3| num::acos(u.dot(v) / (u.norm() * v.norm())).to_degrees();
         let (al, be, ga) = (
             angle(self.b, self.c),
             angle(self.a, self.c),
@@ -183,7 +181,6 @@ impl Lattice {
         let right = |x: f64| ang_eq(x, 90.0);
 
         let abc = eq(la, lb) && eq(lb, lc);
-        let ab = eq(la, lb);
         let all_right = right(al) && right(be) && right(ga);
 
         if abc && all_right {

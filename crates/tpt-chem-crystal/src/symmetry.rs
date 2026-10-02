@@ -41,15 +41,15 @@ impl SymmetryOp {
     /// Apply to a fractional point, wrapping into [0, 1).
     pub fn apply(&self, x: [f64; 3]) -> [f64; 3] {
         let mut out = [0.0; 3];
-        for i in 0..3 {
-            out[i] = (self.r[i][0] as f64) * x[0]
-                + (self.r[i][1] as f64) * x[1]
-                + (self.r[i][2] as f64) * x[2]
-                + self.t[i];
-            out[i] -= out[i].floor();
+        for (row, o) in out.iter_mut().enumerate() {
+            *o = (self.r[row][0] as f64) * x[0]
+                + (self.r[row][1] as f64) * x[1]
+                + (self.r[row][2] as f64) * x[2]
+                + self.t[row];
+            *o -= o.floor();
             // Snap values within fp noise of 1 back to 0.
-            if (out[i] - 1.0).abs() < 1e-10 {
-                out[i] = 0.0;
+            if (*o - 1.0).abs() < 1e-10 {
+                *o = 0.0;
             }
         }
         out
@@ -71,10 +71,7 @@ impl SpaceGroup {
     pub fn by_symbol(symbol: &str) -> Option<SpaceGroup> {
         let ops = match symbol {
             "P1" => vec![SymmetryOp::identity()],
-            "P-1" => vec![
-                SymmetryOp::identity(),
-                SymmetryOp::inversion([0.0; 3]),
-            ],
+            "P-1" => vec![SymmetryOp::identity(), SymmetryOp::inversion([0.0; 3])],
             "P21" => {
                 // 2₁ screw along b: (x, y+½, −z).
                 vec![
@@ -140,11 +137,7 @@ impl SpaceGroup {
             "P4" => {
                 // 4-fold rotation about c: (x,y,z), (−y,x,z), (−x,−y,z), (y,−x,z).
                 let r90 = |s: i32| SymmetryOp {
-                    r: [
-                        [0, -s, 0],
-                        [s, 0, 0],
-                        [0, 0, 1],
-                    ],
+                    r: [[0, -s, 0], [s, 0, 0], [0, 0, 1]],
                     t: [0.0; 3],
                 };
                 vec![
@@ -210,11 +203,7 @@ impl SpaceGroup {
                     ] {
                         ops.push(SymmetryOp {
                             r: op.r,
-                            t: [
-                                op.t[0] + ct[0],
-                                op.t[1] + ct[1],
-                                op.t[2] + ct[2],
-                            ],
+                            t: [op.t[0] + ct[0], op.t[1] + ct[1], op.t[2] + ct[2]],
                         });
                     }
                 }
@@ -250,18 +239,20 @@ impl SpaceGroup {
 /// Compose two symmetry operations: `(op2 ∘ op1)(x) = op2(op1(x))`.
 pub fn compose(op2: &SymmetryOp, op1: &SymmetryOp) -> SymmetryOp {
     let mut r = [[0i32; 3]; 3];
+    #[allow(clippy::needless_range_loop)]
     for i in 0..3 {
         for j in 0..3 {
             r[i][j] = (0..3).map(|k| op2.r[i][k] * op1.r[k][j]).sum();
         }
     }
     let mut t = [0.0; 3];
-    for i in 0..3 {
-        t[i] = (op2.r[i][0] as f64) * op1.t[0]
-            + (op2.r[i][1] as f64) * op1.t[1]
-            + (op2.r[i][2] as f64) * op1.t[2]
-            + op2.t[i];
-        t[i] -= t[i].floor();
+    for (i, ti) in t.iter_mut().enumerate() {
+        #[allow(clippy::needless_range_loop)]
+        for j in 0..3 {
+            *ti += (op2.r[i][j] as f64) * op1.t[j];
+        }
+        *ti += op2.t[i];
+        *ti -= ti.floor();
     }
     SymmetryOp { r, t }
 }
@@ -269,16 +260,12 @@ pub fn compose(op2: &SymmetryOp, op1: &SymmetryOp) -> SymmetryOp {
 /// The 48 cubic point-group operations (m-3m point part, translations zero).
 fn cubic_point_ops() -> Vec<SymmetryOp> {
     // All 3×3 signed permutation matrices with det = ±1: 48 operations.
-    let mut ops = Vec::new();
-    let mut perm = [0usize, 1, 2];
-    // Iterate all permutations of axes with all sign choices.
     fn permute(perm: &mut [usize; 3], k: usize, signs: &[i32; 3], ops: &mut Vec<SymmetryOp>) {
         if k == 3 {
             let mut r = [[0i32; 3]; 3];
-            for row in 0..3 {
-                r[row][perm[row]] = signs[row];
+            for (row, &col) in perm.iter().enumerate() {
+                r[row][col] = signs[row];
             }
-            // Keep only proper/improper orthogonal ops: all 48 signed perms.
             ops.push(SymmetryOp { r, t: [0.0; 3] });
             return;
         }
@@ -289,15 +276,14 @@ fn cubic_point_ops() -> Vec<SymmetryOp> {
             }
         }
     }
-    let sign_list = [-1i32, 1];
+    let mut ops = Vec::new();
     let mut signs = [1i32; 3];
     // Iterate all 8 sign combinations.
     for mask in 0..8usize {
-        for row in 0..3 {
-            signs[row] = if (mask >> row) & 1 == 0 { 1 } else { -1 };
+        for (row, s) in signs.iter_mut().enumerate() {
+            *s = if (mask >> row) & 1 == 0 { 1 } else { -1 };
         }
-        let mut perm = [0usize; 3];
-        permute(&mut perm, 0, &signs, &mut ops);
+        permute(&mut [0usize; 3], 0, &signs, &mut ops);
     }
     ops
 }

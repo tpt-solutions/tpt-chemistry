@@ -130,7 +130,11 @@ mod tests {
         let lat = Lattice::cubic(5.431);
         let m = Miller::new(1, 1, 1);
         let theta = m.bragg_angle(&lat, 1.5406).unwrap();
-        assert!((theta.to_degrees() - 14.22).abs() < 0.05, "{}", theta.to_degrees());
+        assert!(
+            (theta.to_degrees() - 14.22).abs() < 0.05,
+            "{}",
+            theta.to_degrees()
+        );
     }
 
     #[test]
