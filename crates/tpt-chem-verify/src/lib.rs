@@ -33,4 +33,6 @@
 
 pub mod conservation;
 pub mod mass_conservation;
+#[cfg(kani)]
+pub mod proofs;
 pub mod strategies;
