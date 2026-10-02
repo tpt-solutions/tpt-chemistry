@@ -231,9 +231,9 @@ electrostatics, and formal (Kani) verification.*
 
 *Depends on: `tpt-dsp` (3D FFTs).*
 
-- [ ] Wire deps: `tpt-dsp` (3D FFT) — tpt-dsp does not exist; Ewald reciprocal uses direct structure-factor sums (PME grid deferred)
+- [x] Wire deps: `tpt-dsp` (3D FFT) — tpt-dsp does not exist; resolved in-house: `tpt-chem-md/src/fft.rs` implements a from-scratch radix-2 complex FFT (validated against naive DFTs), keeping the zero-external-solver philosophy
 - [x] Ewald summation (real + reciprocal + self, tin-foil)
-- [ ] Particle Mesh Ewald (PME) using `tpt-dsp` 3D FFTs — deferred pending tpt-dsp; direct reciprocal sum covers mid-size cells
+- [x] Particle Mesh Ewald (PME): `tpt-chem-md/src/pme.rs` — order-4 B-spline charge assignment + mesh reciprocal energy/forces with the Essmann |b|² aliasing correction; O(N log N) via the in-house FFT; validated below
 - [x] Leapfrog integrator (validated against velocity Verlet)
 - [x] Langevin thermostat (fluctuation-dissipation in MD units)
 - [x] Nosé-Hoover thermostat (single chain node)
@@ -261,7 +261,7 @@ electrostatics, and formal (Kani) verification.*
 
 - [ ] `cargo build` + `cargo test` green across the whole workspace
 - [ ] All Kani harnesses pass (bounded model checking green)
-- [ ] PME long-range electrostatics validated against Ewald direct-sum reference on a small test system
+- [x] PME long-range electrostatics validated against Ewald direct-sum reference: matching wavenumber cutoffs agree to 5.4e-5 relative (32³) and forces to 4e-2 kJ·mol⁻¹·Å⁻¹, with clean 4th-order convergence (error ÷16 per mesh doubling, asserted in tests); PME forces verified as the exact gradient of the mesh energy by central finite differences
 
 ---
 
@@ -307,8 +307,13 @@ re-export crate and a full workspace hygiene pass.*
       Python RHF (orbitals −20.2516/−1.2576/−0.5939/−0.4597/−0.3926).
       H₂ = −1.11668439 Eₕ and He = −2.80778516 Eₕ (Basis Set Exchange He
       exponents) tightened to 1e-6 tolerances.
-- [ ] PME with 3D FFTs: blocked on the `tpt-dsp` crate existing; Ewald's
-      direct reciprocal sum is the working substitute.
+- [x] PME with 3D FFTs: RESOLVED in-house. `tpt-chem-md/src/fft.rs`
+      (radix-2 Cooley–Tukey, forward/inverse, 3D row-column field) and
+      `tpt-chem-md/src/pme.rs` (order-4 B-spline assignment, Essmann |b|²
+      aliasing correction, spline-derivative forces). Validated against the
+      direct Ewald sum: matched-cutoff agreement at the 4th-order
+      discretization level, exact mesh-energy gradient forces, neutral-force
+      sum. `tpt-dsp` can later replace the FFT backend without API change.
 - [ ] Kani proofs run only on Linux CI (no Windows host support); harnesses
       are written and compile-gated behind `#[cfg(kani)]`.
-- [ ] PME-vs-Ewald validation test (Phase 3 exit) deferred with PME.
+- [x] PME-vs-Ewald validation test (Phase 3 exit): `pme_matches_ewald_with_matching_wavenumber_cutoff` and `pme_converges_to_ewald_as_mesh_refines` in `crates/tpt-chem-md/src/pme.rs`.

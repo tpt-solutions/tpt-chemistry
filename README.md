@@ -33,7 +33,7 @@ Part of the TPT science stack. Full design rationale lives in
 | Crate | Purpose |
 |---|---|
 | [`tpt-chem-core`](crates/tpt-chem-core) | Molecular graphs, force fields, physical constants, unit-safe types |
-| [`tpt-chem-md`](crates/tpt-chem-md) | Integrators (Velocity Verlet, Leapfrog), thermostats, cell/neighbor lists, Ewald/PME |
+| [`tpt-chem-md`](crates/tpt-chem-md) | Integrators (Velocity Verlet, Leapfrog), thermostats, cell/neighbor lists, Ewald and Particle Mesh Ewald (in-house radix-2 FFT + cubic B-splines) |
 | [`tpt-chem-quantum`](crates/tpt-chem-quantum) | Gaussian basis sets, Obara–Saika ERIs, SCF / Hartree–Fock |
 | [`tpt-chem-kinetics`](crates/tpt-chem-kinetics) | Mass-action ODEs, Gillespie SSA, Arrhenius/Eyring rates |
 | [`tpt-chem-crystal`](crates/tpt-chem-crystal) | Bravais lattices, space groups, reciprocal space, XRD simulation |

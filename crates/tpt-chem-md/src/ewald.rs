@@ -8,6 +8,10 @@
 //!
 //! Units: MD units (Å, fs, amu, kJ·mol⁻¹); charges in elementary units e,
 //! so the Coulomb prefactor is [`tpt_chem_core::units::COULOMB_PREFACTOR_KJ_ANG`].
+//!
+//! For large systems the reciprocal sum can be swapped for the mesh-based
+//! [`crate::pme`] solver, which reproduces this sum to the spline
+//! discretization error while scaling as O(N log N).
 
 use tpt_chem_core::special;
 use tpt_chem_core::units::COULOMB_PREFACTOR_KJ_ANG;
@@ -40,13 +44,9 @@ impl EwaldParams {
     }
 }
 
-/// Ewald-summed Coulomb energy and per-atom forces for a periodic system.
-///
-/// Charges `q` in e, positions in Å (must be wrapped into the box), masses
-/// are not needed here. Returns `(forces, coulomb_energy)`. The energy
-/// includes real + reciprocal + self terms (no surface term: appropriate
-/// for tin-foil boundary conditions).
-pub fn ewald_energy_forces(
+/// Real-space part of the Ewald sum: erfc-screened pair interactions within
+/// `r_cutoff`. Returned as `(forces, energy)`.
+pub fn ewald_real_space(
     pos: &[Vec3],
     charges: &[f64],
     box_: &Box3,
@@ -58,7 +58,6 @@ pub fn ewald_energy_forces(
     let alpha = params.alpha;
     let alpha2 = alpha * alpha;
 
-    // ---- Real space: pairs within r_cutoff with erfc screening.
     for i in 0..n {
         for j in (i + 1)..n {
             let raw = pos[j] - pos[i];
@@ -82,6 +81,38 @@ pub fn ewald_energy_forces(
             forces[j] -= fvec;
         }
     }
+    (forces, energy)
+}
+
+/// Self term of the Ewald sum: `−α/√π Σ q²` (tin-foil boundary conditions).
+pub fn ewald_self_energy(charges: &[f64], alpha: f64) -> f64 {
+    let q2: f64 = charges.iter().map(|q| q * q).sum();
+    -COULOMB_PREFACTOR_KJ_ANG * alpha / core::f64::consts::PI.sqrt() * q2
+}
+
+/// Ewald-summed Coulomb energy and per-atom forces for a periodic system.
+///
+/// Charges `q` in e, positions in Å (must be wrapped into the box), masses
+/// are not needed here. Returns `(forces, coulomb_energy)`. The energy
+/// includes real + reciprocal + self terms (no surface term: appropriate
+/// for tin-foil boundary conditions).
+pub fn ewald_energy_forces(
+    pos: &[Vec3],
+    charges: &[f64],
+    box_: &Box3,
+    params: &EwaldParams,
+) -> (Vec<Vec3>, f64) {
+    let n = pos.len();
+    let mut forces = vec![Vec3::ZERO; n];
+    let alpha = params.alpha;
+
+    // ---- Real space.
+    let (real_forces, real_energy) = ewald_real_space(pos, charges, box_, params);
+    for (f, rf) in forces.iter_mut().zip(real_forces.iter()) {
+        *f += *rf;
+    }
+    let mut energy = real_energy;
+    let alpha2 = alpha * alpha;
 
     // ---- Reciprocal space: structure-factor sum over |g| ≤ g_max.
     // Enumerate integer Miller indices within the sphere.
@@ -134,9 +165,8 @@ pub fn ewald_energy_forces(
         }
     }
 
-    // ---- Self term: −α/√π Σ q².
-    let q2: f64 = charges.iter().map(|q| q * q).sum();
-    energy -= COULOMB_PREFACTOR_KJ_ANG * alpha / core::f64::consts::PI.sqrt() * q2;
+    // ---- Self term.
+    energy += ewald_self_energy(charges, alpha);
 
     (forces, energy)
 }

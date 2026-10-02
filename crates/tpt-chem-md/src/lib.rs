@@ -2,7 +2,9 @@
 //!
 //! Symplectic Velocity Verlet integration, from-scratch cell lists and
 //! Verlet neighbor lists for O(N) force evaluation, Lennard-Jones and
-//! Coulomb interactions (spec.txt §4, `tpt-chem-md`).
+//! Coulomb interactions, Ewald summation, and Particle Mesh Ewald
+//! long-range electrostatics on an in-house radix-2 FFT
+//! (spec.txt §4, `tpt-chem-md`).
 //!
 //! # Units
 //!
@@ -36,11 +38,14 @@
 //! ```
 
 pub mod box3;
+pub mod bspline;
 pub mod cell;
 pub mod ewald;
+pub mod fft;
 pub mod forces;
 pub mod integrator;
 pub mod neighbors;
+pub mod pme;
 pub mod system;
 pub mod thermostat;
 
