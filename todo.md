@@ -160,7 +160,10 @@ reaction kinetics (deterministic + stochastic).*
 - [x] Scaffold `crates/tpt-chem-quantum/`
 - [x] Wire deps: `tpt-chem-core`, `tpt-math` (dense eigenvalue decomposition)
 - [x] Gaussian-type orbital (GTO) basis set management (STO-3G for H-Ne; Pople/Dunning future work)
-- [x] From-scratch multi-center ERI evaluation (Obara-Saika scheme; s-shell ERIs validated against the SO table, p-shell accuracy under investigation)
+- [x] From-scratch multi-center ERI evaluation (McMurchie–Davidson Hermite
+      expansion; validated against Gauss–Hermite quadrature, closed-form
+      four-center (ss|ss), exact permutation symmetries, and H₂O/H₂/He
+      literature HF/STO-3G energies to 1e-6)
 - [x] SCF iteration + density damping/mixing
 - [x] Hartree-Fock (HF) matrix construction (restricted closed-shell RHF)
 - [x] Roothaan-Hall equation solving via from-scratch cyclic Jacobi eigensolver
@@ -289,9 +292,21 @@ re-export crate and a full workspace hygiene pass.*
 
 ## Known open items after this pass
 
-- [ ] Water HF/STO-3G energy (-103.3 Eh instead of -74.96): p-shell ERI
-      accuracy in the OS raise_family under investigation (test
-      `water_sto3g_near_equilibrium` is #[ignore]d with this note).
+- [x] Water HF/STO-3G energy: RESOLVED. The electron-repulsion integrals
+      were rewritten on the McMurchie–Davidson Hermite expansion (the OS
+      `raise_family` machinery is gone): per-axis E-coefficients for both
+      primitive pairs contracted against the two-electron Hermite Coulomb
+      auxiliary `R^n_{tuv}(ρ, P−Q)` at the reduced exponent `ρ = pq/(p+q)`
+      with the `(−1)^{τ+ν+φ}` electron-2 sign. Validated against an
+      independent 3D Gauss–Hermite quadrature reference (100+ values, all
+      component classes, ≤ 2.3e-8 = the reference's own finite-difference
+      noise), the closed-form four-center (ss|ss) formula, and the exact
+      8-fold permutation symmetries. `water_sto3g_near_equilibrium` is
+      un-ignored: E = −74.96590117 Eₕ, the canonical RHF/STO-3G water
+      energy, reproduced to 1e-6 and cross-checked by an independent
+      Python RHF (orbitals −20.2516/−1.2576/−0.5939/−0.4597/−0.3926).
+      H₂ = −1.11668439 Eₕ and He = −2.80778516 Eₕ (Basis Set Exchange He
+      exponents) tightened to 1e-6 tolerances.
 - [ ] PME with 3D FFTs: blocked on the `tpt-dsp` crate existing; Ewald's
       direct reciprocal sum is the working substitute.
 - [ ] Kani proofs run only on Linux CI (no Windows host support); harnesses

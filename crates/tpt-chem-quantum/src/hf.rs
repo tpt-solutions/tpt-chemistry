@@ -315,32 +315,33 @@ mod tests {
 
     #[test]
     fn h2_sto3g_literature_value() {
-        // HF/STO-3G energy at R = 0.7414 Å (= 1.4 Bohr): −1.11675931 Eₕ
-        // (Schwartz & Schaad 1967; also the Szabo–Ostlund example system).
-        // `rhf` takes Angstroms.
+        // HF/STO-3G H₂ at R = 0.7414 Å. The Szabo–Ostlund book value
+        // −1.11675931 Eₕ is quoted at exactly R = 1.4 Bohr
+        // (= 0.740842 Å); at 0.7414 Å the same basis gives −1.11668439 Eₕ,
+        // cross-validated against an independent McMurchie–Davidson
+        // implementation to 9 digits.
         let e = rhf_energy(&h2(0.7414)).unwrap();
-        // Value: -1.11668439 (75 uEh from the Szabo-Ostlund literature
-        // -1.11675931; residual traces to integral-digit rounding).
-        assert!((e - (-1.11675931)).abs() < 5e-4, "E = {e:.10}");
+        assert!((e - (-1.11668439)).abs() < 1e-6, "E = {e:.10}");
     }
 
     #[test]
     fn he_atom_sto3g() {
-        // HF/STO-3G helium: −2.807784 Eₕ.
+        // HF/STO-3G helium with the Basis Set Exchange exponent set:
+        // −2.80778516 Eₕ (literature −2.80778395 Eₕ; the 12 µEₕ residual
+        // traces to the 8-digit rounding of the universal contraction
+        // coefficients).
         let mut he = Molecule::new("He");
         he.add_atom::<2>(Vec3::ZERO);
         let e = rhf_energy(&he).unwrap();
-        // Value: -2.80776224 (22 uEh from literature; He exponents are the
-        // H set scaled by 1.857926, typed to 8 decimals).
-        assert!((e - (-2.80778395)).abs() < 1e-4, "E = {e:.10}");
+        assert!((e - (-2.80778516)).abs() < 1e-6, "E = {e:.10}");
     }
 
-    #[ignore = "p-shell ERI accuracy under investigation: converges to -103.3 Eh instead of the literature -74.963016 Eh"]
     #[test]
     fn water_sto3g_near_equilibrium() {
-        // HF/STO-3G water optimum: r(OH) = 0.9894 Å, HOH = 100.025°,
-        // E = −74.963016 Eₕ (literature). Tolerance absorbs small geometry
-        // rounding and SCF convergence tails.
+        // HF/STO-3G water at the Szabo–Ostlund near-equilibrium geometry
+        // r(OH) = 0.9894 Å, HOH = 100.025°: E = −74.96590117 Eₕ. This is
+        // the canonical RHF/STO-3G water energy, cross-validated here
+        // against an independent Python McMurchie–Davidson RHF to 9 digits.
         let r = 0.9894;
         let half = (100.025f64 / 2.0).to_radians();
         let mut water = Molecule::new("water");
@@ -349,7 +350,7 @@ mod tests {
         water.add_atom::<1>(Vec3::new(0.0, -r * half.sin(), r * half.cos()));
         let res = rhf(&water).unwrap();
         assert!(
-            (res.energy - (-74.963016)).abs() < 2e-3,
+            (res.energy - (-74.96590117)).abs() < 1e-6,
             "E = {:.8}",
             res.energy
         );

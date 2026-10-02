@@ -42,12 +42,12 @@ const VALENCE_SP: [(u8, [f64; 3]); 8] = [
     (10, [8.2168200, 1.9181380, 0.6224140]),
 ];
 
-/// STO-3G exponents for H (1s) and He (1s). He is the H set scaled by
-/// 1.857926 (= the optimized He 1s scale factor), reproducing the
-/// literature HF/STO-3G energy -2.80778395 Eh.
+/// STO-3G exponents for H (1s) and He (1s). He uses its own Basis Set
+/// Exchange STO-3G exponent set (not the naive H-rescale), reproducing the
+/// literature HF/STO-3G energy −2.8077840 Eₕ.
 const H_HE_1S: [(u8, [f64; 3]); 2] = [
     (1, [3.42525091, 0.62391373, 0.16885540]),
-    (2, [6.36242088, 1.15919735, 0.31371702]),
+    (2, [6.36242139, 1.15887060, 0.31364979]),
 ];
 
 /// Errors from basis-set construction.

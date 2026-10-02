@@ -1,20 +1,25 @@
 //! From-scratch one- and two-electron integral evaluation over contracted
-//! Cartesian Gaussians, via the Obara–Saika (OS) recursion scheme
-//! (Obara & Saika, J. Chem. Phys. 84, 3963 (1986); Thijssen,
-//! "Computational Physics", ch. 15).
+//! Cartesian Gaussians.
 //!
-//! All routines are primitive-first: the OS recurrences run per primitive
+//! All routines are primitive-first: the recurrences run per primitive
 //! combination and the shell-level wrappers contract with the coefficients
 //! and component normalizations.
 //!
 //! Recursion families:
 //!
-//! * **Overlap** — per-axis 1D OS recurrence.
+//! * **Overlap** — per-axis 1D Obara–Saika recurrence (Obara & Saika,
+//!   J. Chem. Phys. 84, 3963 (1986)).
 //! * **Kinetic** — derivatives of the overlap (`⟨a|−½∇²|b⟩`).
-//! * **Nuclear attraction** — OS with Boys base
-//!   `(00)^m = (2π/p)·K_ab·F_m(T)` and the `q→∞` limit factors.
-//! * **Electron repulsion** — the full two-electron OS recursion, built
-//!   from the same raising machinery on both electrons.
+//! * **Nuclear attraction** — McMurchie–Davidson: the primitive pair is
+//!   expanded in Hermite Gaussians about `P` (per-axis E-coefficients) and
+//!   contracted against the Hermite Coulomb auxiliary `R^n_{tuv}`.
+//! * **Electron repulsion** — McMurchie–Davidson (McMurchie & Davidson,
+//!   J. Chem. Phys. 68, 3344 (1978); Helgaker, Jørgensen & Olsen,
+//!   "Molecular Electronic-Structure Theory", ch. 9): E-coefficients of
+//!   both primitive pairs contracted against the two-electron Hermite
+//!   Coulomb auxiliary `R^n_{tuv}(ρ, P−Q)` at the reduced exponent
+//!   `ρ = pq/(p+q)`, with the electron-2 Hermite indices carrying the
+//!   `(−1)^{τ+ν+φ}` sign.
 //!
 //! Atomic units throughout.
 
@@ -22,7 +27,7 @@ use tpt_chem_core::num;
 use tpt_chem_core::vec3::Vec3;
 
 use crate::boys::boys_array;
-use crate::gaussian::{all_components_up_to, cartesian_components, primitive_normalization, Shell};
+use crate::gaussian::{cartesian_components, primitive_normalization, Shell};
 
 /// One primitive of a contracted shell (the component-dependent Cartesian
 /// normalization is applied at the shell wrappers).
@@ -44,14 +49,11 @@ struct Pair {
     pa: Vec3,
     /// `A − B` (horizontal transfer vector).
     ab: Vec3,
-    /// `exp(−αβ/p·|A−B|²)`.
-    kab: f64,
 }
 
 fn make_pair(alpha: f64, a: Vec3, beta: f64, b: Vec3) -> Pair {
     let p = alpha + beta;
     let ab = a - b;
-    let kab = num::exp(-alpha * beta / p * ab.norm_sq());
     let center = (a * alpha + b * beta) / p;
     Pair {
         p,
@@ -60,7 +62,6 @@ fn make_pair(alpha: f64, a: Vec3, beta: f64, b: Vec3) -> Pair {
         center,
         pa: center - a,
         ab,
-        kab,
     }
 }
 
@@ -206,139 +207,13 @@ pub fn kinetic_shell(a: &Shell, b: &Shell) -> Vec<Vec<f64>> {
     out
 }
 
-/// The OS "raising family": all m-arrays `V(a, b)^m` for
-/// `|a| ≤ la`, `|b| ≤ lb`, given the `(0,0)^m` base array.
-///
-/// * `pa`, `ab`, `wp` — the `P−A`, `A−B`, `W−P` vectors.
-/// * `reduce` — the factor `q/(p+q)` multiplying the `^{m+1}` correction
-///   of the lowering terms (ERI electron 1) or `1` (nuclear attraction,
-///   the `q→∞` limit).
-///
-/// Recurrences (Obara–Saika):
-/// * raise: `V(a+1,b)^m = PA·V(a,b)^m + WP·V(a+1,b)^{m+1}
-///   + a/(2p)·[V(a−1,b)^m − R·V(a−1,b)^{m+1}]
-///   + b/(2p)·[V(a,b−1)^m − R·V(a,b−1)^{m+1}]`
-/// * horizontal: `(a, b+1) = (a+1, b) − AB·(a, b)`
-#[allow(clippy::too_many_arguments, clippy::needless_range_loop)]
-fn raise_family(
-    la: u8,
-    lb: u8,
-    p: f64,
-    pa: Vec3,
-    ab: Vec3,
-    wp: Vec3,
-    reduce: f64,
-    base: &[f64],
-) -> Vec<Vec<Vec<f64>>> {
-    let max_m = base.len() - 1;
-    // Intermediates are generated up to `la + 1`: the horizontal
-    // transfer (0, b) = (1, b-1) - AB*(0, b-1) needs one raising step
-    // beyond `la` even when `la == 0`. Consumers only read |a| <= la.
-    let a_gen = all_components_up_to(la + 1);
-    let b_comps = all_components_up_to(lb);
-    let mut v = vec![vec![vec![0.0f64; max_m + 1]; b_comps.len()]; a_gen.len()];
-    v[0][0].copy_from_slice(base);
-    let inv2p = 0.5 / p;
-
-    let total = |c: (u8, u8, u8)| u16::from(c.0) + u16::from(c.1) + u16::from(c.2);
-    let idx = |comps: &[(u8, u8, u8)], c: (u8, u8, u8)| -> usize {
-        comps
-            .iter()
-            .position(|&x| x == c)
-            .expect("component generated earlier")
-    };
-
-    for t in 1..=(total((la, 0, 0)) + total((0, lb, 0))) {
-        // Phase 1: raising cases (a ≠ 0).
-        for (ia, &a) in a_gen.iter().enumerate() {
-            for (ib, &b) in b_comps.iter().enumerate() {
-                if total(a) + total(b) != t || total(a) == 0 {
-                    continue;
-                }
-                let axis = if a.0 > 0 {
-                    0
-                } else if a.1 > 0 {
-                    1
-                } else {
-                    2
-                };
-                let mut a_down = a;
-                a_down.0 -= u8::from(axis == 0);
-                a_down.1 -= u8::from(axis == 1);
-                a_down.2 -= u8::from(axis == 2);
-                let src = &v[idx(&a_gen, a_down)][ib];
-                // Optional lowering of b on the same axis.
-                let (b_down_idx, b_n): (Option<usize>, f64) = match axis {
-                    0 if b.0 > 0 => (Some(idx(&b_comps, (b.0 - 1, b.1, b.2))), f64::from(b.0)),
-                    1 if b.1 > 0 => (Some(idx(&b_comps, (b.0, b.1 - 1, b.2))), f64::from(b.1)),
-                    2 if b.2 > 0 => (Some(idx(&b_comps, (b.0, b.1, b.2 - 1))), f64::from(b.2)),
-                    _ => (None, 0.0),
-                };
-                let pa_axis = pa.get(axis);
-                let wp_axis = wp.get(axis);
-                // OS lowering coefficient: the recurrence's a_i is the
-                // raised (target) index in the OS convention.
-                let n_a = match axis {
-                    0 => f64::from(a.0),
-                    1 => f64::from(a.1),
-                    _ => f64::from(a.2),
-                };
-                let mut arr = vec![0.0; max_m + 1];
-                for m in (0..=max_m).rev() {
-                    let hi = |arr_hi: &[f64]| arr_hi.get(m + 1).copied().unwrap_or(0.0);
-                    let mut val = pa_axis * src[m] + wp_axis * hi(&arr);
-                    if n_a > 0.0 {
-                        val += n_a * inv2p * (src[m] - reduce * hi(src));
-                    }
-                    if let Some(bdi) = b_down_idx {
-                        let bd = &v[ia][bdi];
-                        val += b_n * inv2p * (bd[m] - reduce * hi(bd));
-                    }
-                    arr[m] = val;
-                }
-                v[ia][ib] = arr;
-            }
-        }
-        // Phase 2: horizontal cases (a == 0, b ≠ 0):
-        // (0, b) = (1, b−1) − AB·(0, b−1).
-        for (ia, &a) in a_gen.iter().enumerate() {
-            for (ib, &b) in b_comps.iter().enumerate() {
-                if total(a) + total(b) != t || total(a) != 0 || total(b) == 0 {
-                    continue;
-                }
-                let baxis = if b.0 > 0 {
-                    0
-                } else if b.1 > 0 {
-                    1
-                } else {
-                    2
-                };
-                let mut a_up = a;
-                a_up.0 += u8::from(baxis == 0);
-                a_up.1 += u8::from(baxis == 1);
-                a_up.2 += u8::from(baxis == 2);
-                let mut b_down = b;
-                b_down.0 -= u8::from(baxis == 0);
-                b_down.1 -= u8::from(baxis == 1);
-                b_down.2 -= u8::from(baxis == 2);
-                let up = &v[idx(&a_gen, a_up)][idx(&b_comps, b_down)];
-                let prev = &v[ia][idx(&b_comps, b_down)];
-                let ab_axis = ab.get(baxis);
-                let mut arr = vec![0.0; max_m + 1];
-                for m in 0..=max_m {
-                    arr[m] = up[m] + ab_axis * prev[m];
-                }
-                v[ia][ib] = arr;
-            }
-        }
-    }
-    v
-}
-
 /// Primitive ERI `(ab|cd)` for all component combinations, via the
-/// Obara-Saika two-electron recursion: electron 1 is raised first
-/// (`V1[a][b]` with `c = d = 0`), then electron 2 per `(a, b)` pair.
-#[allow(clippy::needless_range_loop)]
+/// McMurchie–Davidson Hermite expansion: per-axis E-coefficients for each
+/// primitive pair (seeded with the per-axis `exp(−αβ/p·Δ²)` overlap
+/// factor), contracted against the two-electron Hermite Coulomb auxiliary
+/// `R^n_{tuv}(ρ, P−Q)` at the reduced exponent `ρ = pq/(p+q)`; the
+/// electron-2 Hermite indices carry the `(−1)^{τ+ν+φ}` sign.
+#[allow(clippy::too_many_lines)]
 fn eri_primitive(
     pair1: &Pair,
     pair2: &Pair,
@@ -349,74 +224,79 @@ fn eri_primitive(
 ) -> Vec<Vec<Vec<Vec<f64>>>> {
     let p = pair1.p;
     let q = pair2.p;
-    let p_center = pair1.center;
-    let q_center = pair2.center;
-    let w_total = (p_center * p + q_center * q) / (p + q);
-    let max_m = (la + lb + lc + ld) as usize;
-    let t = p * q / (p + q) * (p_center - q_center).norm_sq();
-    // The WP raise at the top of the (0,0,1) m-array reaches F_{max_m+1},
-    // so the base carries one extra Boys term.
-    let boys = boys_array(t, max_m + 1);
-    let base: Vec<f64> = boys
-        .iter()
-        .map(|&f| {
-            2.0 * num::powf(core::f64::consts::PI, 2.5) / (p * q * num::sqrt(p + q))
-                * pair1.kab
-                * pair2.kab
-                * f
-        })
-        .collect();
-    let reduce1 = q / (p + q);
-    let v1 = raise_family(
-        la,
-        lb,
-        p,
-        pair1.pa,
-        pair1.ab,
-        w_total - p_center,
-        reduce1,
-        &base,
-    );
-    let a_comps = all_components_up_to(la);
-    let b_comps = all_components_up_to(lb);
-    let c_comps = all_components_up_to(lc);
-    let d_comps = all_components_up_to(ld);
-    let a_gen = all_components_up_to(la + 1);
+    let prefac = 2.0 * num::powf(core::f64::consts::PI, 2.5) / (p * q * num::sqrt(p + q));
+    let mut e1: [Vec<Vec<Vec<f64>>>; 3] = Default::default();
+    let mut e2: [Vec<Vec<Vec<f64>>>; 3] = Default::default();
+    for axis in 0..3 {
+        let d1 = pair1.ab.get(axis);
+        let k1 = num::exp(-pair1.alpha * pair1.beta / p * d1 * d1);
+        e1[axis] = hermite_coeffs_1d(
+            pair1.pa.get(axis),
+            (pair1.pa + pair1.ab).get(axis),
+            p,
+            la as usize,
+            lb as usize,
+            k1,
+        );
+        let d2 = pair2.ab.get(axis);
+        let k2 = num::exp(-pair2.alpha * pair2.beta / q * d2 * d2);
+        e2[axis] = hermite_coeffs_1d(
+            pair2.pa.get(axis),
+            (pair2.pa + pair2.ab).get(axis),
+            q,
+            lc as usize,
+            ld as usize,
+            k2,
+        );
+    }
+    let rho = p * q / (p + q);
+    let pq = pair1.center - pair2.center;
+    let r_max = (la + lb + lc + ld) as usize;
+    let r = hermite_coulomb_r(rho, pq, r_max, r_max, r_max, r_max);
+
+    let a_comps = cartesian_components(la);
+    let b_comps = cartesian_components(lb);
+    let c_comps = cartesian_components(lc);
+    let d_comps = cartesian_components(ld);
     let mut out =
         vec![vec![vec![vec![0.0f64; d_comps.len()]; c_comps.len()]; b_comps.len()]; a_comps.len()];
     for (ia, &a) in a_comps.iter().enumerate() {
         for (ib, &b) in b_comps.iter().enumerate() {
-            let used_m = (total(a) + total(b)) as usize;
-            if used_m > max_m {
-                continue;
-            }
-            let ia_gen = a_gen
-                .iter()
-                .position(|&x| x == a)
-                .expect("component within la");
-            let sub_base = &v1[ia_gen][ib][used_m..];
-            let v2 = raise_family(
-                lc,
-                ld,
-                q,
-                pair2.pa,
-                pair2.ab,
-                w_total - q_center,
-                p / (p + q),
-                sub_base,
-            );
-            for (ic, _) in c_comps.iter().enumerate() {
-                for (id, _) in d_comps.iter().enumerate() {
-                    out[ia][ib][ic][id] = v2[ic][id][0];
+            for (ic, &c) in c_comps.iter().enumerate() {
+                for (id, &d) in d_comps.iter().enumerate() {
+                    let mut sum = 0.0;
+                    for t in 0..=(a.0 + b.0) {
+                        for u in 0..=(a.1 + b.1) {
+                            for v in 0..=(a.2 + b.2) {
+                                let ea = e1[0][a.0 as usize][b.0 as usize][t as usize]
+                                    * e1[1][a.1 as usize][b.1 as usize][u as usize]
+                                    * e1[2][a.2 as usize][b.2 as usize][v as usize];
+                                for tau in 0..=(c.0 + d.0) {
+                                    for nu in 0..=(c.1 + d.1) {
+                                        for phi in 0..=(c.2 + d.2) {
+                                            let sign =
+                                                if (tau + nu + phi) % 2 == 0 { 1.0 } else { -1.0 };
+                                            let ec = e2[0][c.0 as usize][d.0 as usize]
+                                                [tau as usize]
+                                                * e2[1][c.1 as usize][d.1 as usize][nu as usize]
+                                                * e2[2][c.2 as usize][d.2 as usize][phi as usize];
+                                            sum += sign
+                                                * ea
+                                                * ec
+                                                * r[(t + tau) as usize][(u + nu) as usize]
+                                                    [(v + phi) as usize][0];
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    out[ia][ib][ic][id] = prefac * sum;
                 }
             }
         }
     }
     out
-}
-
-fn total(c: (u8, u8, u8)) -> u8 {
-    c.0 + c.1 + c.2
 }
 
 /// Shell-pair nuclear-attraction matrix `[a][b]` for
@@ -749,50 +629,6 @@ mod tests {
 }
 
 #[cfg(test)]
-mod dbg_tmp {
-    use super::*;
-    use crate::gaussian::Shell;
-
-    #[test]
-    fn dbg_kinetic_axes() {
-        let a = Vec3::new(0.0, 0.0, 0.0);
-        let b = Vec3::new(0.0, 0.0, 0.8);
-        let mut sa = Shell::new(0, a, vec![(1.0, 1.0)]);
-        sa.normalize();
-        let mut sb = Shell::new(0, b, vec![(1.0, 1.0)]);
-        sb.normalize();
-        let pi = Prim {
-            alpha: 1.0,
-            coeff: 1.0,
-        };
-        let pj = Prim {
-            alpha: 1.0,
-            coeff: 1.0,
-        };
-        let pair = make_pair(1.0, a, 1.0, b);
-        let global = num::powf(core::f64::consts::PI / pair.p, 1.5);
-        let tables = overlap_tables(1.0, 1.0, &pair, 0, 2);
-        for axis in 0..3 {
-            for dj in [0i32, 2] {
-                let comp = match (axis, dj) {
-                    (0, d) => (d as u8, 0, 0),
-                    (1, d) => (0, d as u8, 0),
-                    (2, d) => (0, 0, d as u8),
-                    _ => unreachable!(),
-                };
-                println!(
-                    "axis {axis} dj {dj}: table = {:.6}, with global = {:.6}",
-                    table_val(&tables, (0, 0, 0), comp),
-                    global * table_val(&tables, (0, 0, 0), comp)
-                );
-            }
-        }
-        println!("global = {global:.6}");
-        let _ = (sa, sb, pi, pj);
-    }
-}
-
-#[cfg(test)]
 mod p_shell_tests {
     use super::*;
     use crate::gaussian::Shell;
@@ -800,6 +636,12 @@ mod p_shell_tests {
     fn pz(alpha: f64, center: Vec3) -> Shell {
         // p_z: the (0, 0, 1) component is index 0 of l=1 components.
         let mut sh = Shell::new(1, center, vec![(alpha, 1.0)]);
+        sh.normalize();
+        sh
+    }
+
+    fn s_shell(alpha: f64, center: Vec3) -> Shell {
+        let mut sh = Shell::new(0, center, vec![(alpha, 1.0)]);
         sh.normalize();
         sh
     }
@@ -857,101 +699,145 @@ mod p_shell_tests {
             n2 * kab * num::powf(core::f64::consts::PI / p, 1.5) * (1.0 / (2.0 * p) + pa_z * pb_z);
         assert!((got - want).abs() < 1e-12, "{got} vs {want}");
     }
-}
-
-#[cfg(test)]
-mod dbg_p {
-    use super::*;
-    use crate::gaussian::Shell;
 
     #[test]
-    fn dbg_p_kinetic_axes() {
-        let alpha = 1.3f64;
-        let mut sh = Shell::new(1, Vec3::ZERO, vec![(alpha, 1.0)]);
-        sh.normalize();
-        println!("shell_norm = {:?}", sh.normalizations);
-        println!(
-            "prim_norm(0,0,1) = {}",
-            primitive_normalization(alpha, (0, 0, 1))
-        );
-        let pi = Prim { alpha, coeff: 1.0 };
-        let pair = make_pair(alpha, Vec3::ZERO, alpha, Vec3::ZERO);
-        let global = num::powf(core::f64::consts::PI / pair.p, 1.5);
-        println!("p = {}, global = {:.6}", pair.p, global);
-        let tables = overlap_tables(alpha, alpha, &pair, 1, 3);
-        // z-axis table rows: s[0], s[1] for j = 0..=3.
-        for (i, row) in tables[2].iter().take(2).enumerate() {
-            println!(
-                "z-table s[{i}] = {:?}",
-                row.iter()
-                    .map(|x| (x * 1e4).round() / 1e4)
-                    .collect::<Vec<_>>()
-            );
-        }
-        for (i, row) in tables[0].iter().take(2).enumerate() {
-            println!(
-                "x-table s[{i}] = {:?}",
-                row.iter()
-                    .map(|x| (x * 1e4).round() / 1e4)
-                    .collect::<Vec<_>>()
-            );
-        }
-        let t = kinetic_shell(&sh, &sh);
-        println!("T(pz,pz) = {:.6}, T(px,px) = {:.6}", t[0][0], t[2][2]);
-        let _ = (pi, sh);
-    }
-}
-
-#[cfg(test)]
-mod dbg_v {
-    use super::*;
-    use crate::gaussian::Shell;
-
-    #[test]
-    fn dbg_pz_self_v() {
-        let alpha = 1.3f64;
+    fn eri_pp_ss_self_analytic() {
+        // Co-located normalized 2p/1s primitives with exponent α:
+        // (p_z p_z|ss) = (5/3)√(α/π). Derived from
+        // (1/3)(−∂/∂p)·[2π^{5/2}/(pq√(p+q))] at p = q = 2α.
+        let alpha = 0.9;
         let c = Vec3::new(0.2, -0.4, 0.6);
-        let mut sh = Shell::new(1, c, vec![(alpha, 1.0)]);
-        sh.normalize();
-        println!("shell_norm = {}", sh.normalizations[0]);
-        let _pi = Prim { alpha, coeff: 1.0 };
-        let _pj = Prim { alpha, coeff: 1.0 };
-        let pair = make_pair(alpha, c, alpha, c);
-        println!(
-            "p = {}, kab = {}, pa = {:?}",
-            pair.p,
-            pair.kab,
-            (pair.pa.x, pair.pa.y, pair.pa.z)
-        );
-        let max_m = 1usize;
-        let t = pair.p * (pair.center - c).norm_sq();
-        println!("T = {t}");
-        let boys = boys_array(t, max_m);
-        let base: Vec<f64> = boys
-            .iter()
-            .map(|&f| 2.0 * core::f64::consts::PI / pair.p * pair.kab * f)
-            .collect();
-        println!("base = {base:?}");
-        let tables = raise_family(1, 0, pair.p, pair.pa, pair.ab, Vec3::ZERO, 1.0, &base);
-        let a_gen = crate::gaussian::all_components_up_to(2);
-        for (i, comp) in a_gen.iter().enumerate() {
-            println!("v[{i}] ({comp:?}) m0 = {:.6}", tables[i][0][0]);
+        let p = pz(alpha, c);
+        let s = s_shell(alpha, c);
+        let v = eri_shell(&p, &p, &s, &s)[0][0][0][0];
+        let want = 5.0 / 3.0 * num::sqrt(alpha / core::f64::consts::PI);
+        assert!((v - want).abs() < 1e-10, "{v} vs {want}");
+    }
+
+    #[test]
+    fn eri_pp_pp_self_tensor() {
+        // Co-located equal-exponent p shells: isotropy fixes the full
+        // (p_μ p_ν|p_λ p_σ) tensor to
+        //   T = a·δ_μν δ_λσ + b·(δ_μλ δ_νσ + δ_μσ δ_νλ),
+        // with a, b cross-validated against 3D Gauss–Hermite quadrature of
+        // ∫ρ_ab(r1) V_cd(r1) dr1 (α = 0.9):
+        //   (p_z p_z|p_z p_z) = a + 2b,  (p_z p_z|p_x p_x) = a,
+        //   (p_z p_x|p_z p_x) = (p_z p_x|p_x p_z) = b,
+        // and every mismatched-index element vanishes.
+        let alpha = 0.9;
+        let a_val = 0.767_173_295_3;
+        let b_val = 0.053_523_721_9;
+        let c = Vec3::new(0.2, -0.4, 0.6);
+        let p = pz(alpha, c);
+        let v = eri_shell(&p, &p, &p, &p);
+        for (i, row) in v.iter().enumerate() {
+            for (j, r2) in row.iter().enumerate() {
+                for (k, r3) in r2.iter().enumerate() {
+                    for (l, &val) in r3.iter().enumerate() {
+                        // Map component indices to exponent vectors.
+                        let comp = |idx: usize| [(0u8, 0u8, 1u8), (0, 1, 0), (1, 0, 0)][idx.min(2)];
+                        let (m, n, lam, sig) = (comp(i), comp(j), comp(k), comp(l));
+                        let want = if m == n && lam == sig {
+                            if m == lam {
+                                a_val + 2.0 * b_val
+                            } else {
+                                a_val
+                            }
+                        } else if (m == lam && n == sig) || (m == sig && n == lam) {
+                            b_val
+                        } else {
+                            0.0
+                        };
+                        assert!(
+                            (val - want).abs() < 1e-7,
+                            "v[{i}][{j}][{k}][{l}] = {val} vs {want}"
+                        );
+                    }
+                }
+            }
         }
-        let nv = nuclear_value(
-            &make_pair(alpha, c, alpha, c),
-            c,
-            1,
-            0,
-            (0, 0, 1),
-            (0, 0, 0),
-        );
-        println!("nuclear_value raw = {nv:.6}");
-        let na = crate::gaussian::primitive_normalization(alpha, (0, 0, 1));
-        let nb = crate::gaussian::primitive_normalization(alpha, (0, 0, 1));
-        println!("na = {na:.6}, nb = {nb:.6}, product = {:.6}", na * nb);
-        println!("expected V = {:.6}", -nv * na * nb);
-        let v = nuclear_shell(&sh, &sh, &[(1.0, c)]);
-        println!("V(pz,pz) = {:.6}", v[0][0]);
-        println!("shell normalizations = {:?}", sh.normalizations);
+    }
+
+    #[test]
+    fn eri_ss_four_center_primitive_formula() {
+        // Four normalized single-primitive s shells at distinct centers:
+        // compare against the textbook closed form
+        // (ss|ss) = 2π^{5/2}/(pq√(p+q))·K_ab·K_cd·F_0(ρ|P−Q|²),
+        // ρ = pq/(p+q) — this pins the reduced exponent and the K factors
+        // at nonzero Boys argument. Single-primitive s shells carry
+        // per-function normalization (2α/π)^{3/4} in `eri_shell`.
+        let alphas = [1.1, 0.7, 1.3, 0.5];
+        let centers = [
+            Vec3::new(0.1, 0.2, 0.3),
+            Vec3::new(0.9, 0.0, 0.0),
+            Vec3::new(0.0, 0.7, 0.4),
+            Vec3::new(0.3, 0.3, 1.1),
+        ];
+        let shells: Vec<Shell> = centers
+            .iter()
+            .zip(alphas)
+            .map(|(&c, a)| {
+                let mut sh = Shell::new(0, c, vec![(a, 1.0)]);
+                sh.normalize();
+                sh
+            })
+            .collect();
+        let got = eri_shell(&shells[0], &shells[1], &shells[2], &shells[3])[0][0][0][0];
+        let (pa, pb, pc, pd) = (alphas[0], alphas[1], alphas[2], alphas[3]);
+        let p = pa + pb;
+        let q = pc + pd;
+        let rho = p * q / (p + q);
+        let ab = centers[0] - centers[1];
+        let cd = centers[2] - centers[3];
+        let pq = (centers[0] * pa + centers[1] * pb) / p - (centers[2] * pc + centers[3] * pd) / q;
+        let boys = crate::boys::boys_array(rho * pq.norm_sq(), 0);
+        let norm_prod: f64 = alphas
+            .iter()
+            .map(|&a| primitive_normalization(a, (0, 0, 0)))
+            .product();
+        let want = 2.0 * num::powf(core::f64::consts::PI, 2.5) / (p * q * num::sqrt(p + q))
+            * num::exp(-pa * pb / p * ab.norm_sq())
+            * num::exp(-pc * pd / q * cd.norm_sq())
+            * boys[0]
+            * norm_prod;
+        assert!((got - want).abs() < 1e-12, "{got} vs {want}");
+    }
+
+    #[test]
+    fn eri_p_shell_symmetries() {
+        // Permutation identities in tensor-index form: swapping functions
+        // 1↔2 transposes the first two index pair, 3↔4 the last pair, and
+        // the electron exchange (12|34) = (34|12) swaps the index pairs.
+        let alpha = 1.3;
+        let pz_at = |c: Vec3| pz(alpha, c);
+        let a = pz_at(Vec3::new(0.0, 0.0, 0.0));
+        let b = pz_at(Vec3::new(0.5, 0.0, 0.0));
+        let c = pz_at(Vec3::new(0.0, 0.7, 0.0));
+        let d = pz_at(Vec3::new(0.2, 0.0, 0.9));
+        let abcd = eri_shell(&a, &b, &c, &d);
+        let bacd = eri_shell(&b, &a, &c, &d);
+        let abdc = eri_shell(&a, &b, &d, &c);
+        let cdab = eri_shell(&c, &d, &a, &b);
+        for i in 0..3 {
+            for j in 0..3 {
+                for k in 0..3 {
+                    for l in 0..3 {
+                        let v = abcd[i][j][k][l];
+                        assert!(
+                            (v - bacd[j][i][k][l]).abs() < 1e-12,
+                            "(12) swap at [{i}][{j}][{k}][{l}]"
+                        );
+                        assert!(
+                            (v - abdc[i][j][l][k]).abs() < 1e-12,
+                            "(34) swap at [{i}][{j}][{k}][{l}]"
+                        );
+                        assert!(
+                            (v - cdab[k][l][i][j]).abs() < 1e-12,
+                            "(13|24) swap at [{i}][{j}][{k}][{l}]"
+                        );
+                    }
+                }
+            }
+        }
     }
 }
