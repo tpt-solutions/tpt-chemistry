@@ -2,7 +2,8 @@
 //! (spec.txt §4, `tpt-chem-quantum`).
 //!
 //! Gaussian-type-orbital basis sets (STO-3G for H–Ne), from-scratch
-//! Obara–Saika evaluation of one- and two-electron integrals, and a
+//! Obara–Saika overlap/kinetic and McMurchie–Davidson attraction/ERI
+//! evaluation of one- and two-electron integrals, and a
 //! restricted closed-shell Hartree–Fock self-consistent-field driver
 //! solving the Roothaan–Hall equations with a from-scratch cyclic Jacobi
 //! eigensolver.

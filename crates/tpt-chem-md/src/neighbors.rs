@@ -24,6 +24,10 @@ pub struct VerletList {
     reference: Vec<Vec3>,
     /// Whether the last build used periodic wrapping.
     periodic: bool,
+    /// Set by [`VerletList::invalidate`]: an external event (e.g. a
+    /// barostat rescaling positions and box) made the reference positions
+    /// meaningless, forcing the next rebuild.
+    stale: bool,
 }
 
 impl VerletList {
@@ -59,7 +63,17 @@ impl VerletList {
             skin,
             reference: positions.to_vec(),
             periodic: box_.is_some(),
+            stale: false,
         }
+    }
+
+    /// Force the next [`VerletList::needs_update`] to report `true`.
+    ///
+    /// Call after anything moves atoms by more than the half-skin criterion
+    /// can track — the canonical case is a barostat rescaling positions and
+    /// box together, which leaves the stored reference positions stale.
+    pub fn invalidate(&mut self) {
+        self.stale = true;
     }
 
     /// Whether any atom has moved more than `skin/2` since the last build.
@@ -68,6 +82,9 @@ impl VerletList {
     /// minimum-image convention so slow drift across a boundary does not
     /// trigger spurious rebuilds.
     pub fn needs_update(&self, positions: &[Vec3], box_: Option<Box3>) -> bool {
+        if self.stale {
+            return true;
+        }
         let threshold = 0.25 * self.skin * self.skin; // (skin/2)²
         if self.reference.len() != positions.len() {
             return true;

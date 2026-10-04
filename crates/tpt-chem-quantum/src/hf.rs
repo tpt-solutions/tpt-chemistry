@@ -16,6 +16,25 @@ use crate::gaussian::cartesian_components;
 use crate::integrals::{eri_shell, kinetic_shell, nuclear_repulsion, nuclear_shell, overlap_shell};
 use crate::linalg::{jacobi_eigh, mat_mul, transpose};
 
+/// Closed-shell density matrix `D = 2·Σ_occ C_io C_jo` (row-major).
+///
+/// Extracted from the SCF loop so verification can reason about the exact
+/// construction: for any real coefficient matrix the result is symmetric
+/// positive semi-definite by construction.
+pub fn density_from_orbitals(coeffs: &[f64], n_occ: usize, nb: usize) -> Vec<f64> {
+    let mut d = vec![0.0; nb * nb];
+    for i in 0..nb {
+        for j in 0..nb {
+            let mut acc = 0.0;
+            for o in 0..n_occ {
+                acc += coeffs[i * nb + o] * coeffs[j * nb + o];
+            }
+            d[i * nb + j] = 2.0 * acc;
+        }
+    }
+    d
+}
+
 /// Errors from the HF driver.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HfError {
@@ -23,6 +42,8 @@ pub enum HfError {
     UnsupportedElement,
     /// The SCF loop did not reach convergence within the iteration cap.
     NotConverged,
+    /// The molecule needs more basis functions than the driver accepts.
+    BasisTooLarge,
     /// A non-finite value appeared during the SCF (imploding geometry).
     NumericalBlowup,
 }
@@ -34,6 +55,7 @@ impl core::fmt::Display for HfError {
                 write!(f, "element outside the STO-3G parameterization (H–Ne)")
             }
             HfError::NotConverged => write!(f, "SCF did not converge"),
+            HfError::BasisTooLarge => write!(f, "basis exceeds the driver's function cap"),
             HfError::NumericalBlowup => write!(f, "non-finite value during SCF"),
         }
     }
@@ -60,9 +82,60 @@ pub struct HfResult {
     pub n_basis: usize,
 }
 
-/// Maximum number of shells (basis functions) accepted; guards the dense
-/// O(N⁴) ERI build.
-const MAX_BASIS: usize = 128;
+/// Maximum number of basis functions accepted. Memory is O(N²) per SCF
+/// (Fock, density, orthogonalizer) plus the packed Schwarz-screened shell
+/// quartets, so the cap is a compute guard rather than a memory cliff.
+const MAX_BASIS: usize = 256;
+
+/// Schwarz screening threshold (Hartree): a shell quartet `(ab|cd)` is
+/// skipped when `√|(ab|ab)| · √|(cd|cd)|` falls below it, which bounds every
+/// element of the quartet.
+const SCHWARZ_THRESHOLD: f64 = 1e-9;
+
+/// One Schwarz-screened shell quartet's packed component tensor.
+struct PackedQuartet {
+    /// Shell indices `[a, b, c, d]`.
+    shells: [usize; 4],
+    /// Cartesian components per shell `[na, nb, nc, nd]`.
+    dims: [usize; 4],
+    /// Component tensor, row-major `[ia][ib][ic][id]`.
+    v: Vec<f64>,
+}
+
+/// `G = Σ_{λσ} D_{λσ}[(μν|λσ) − ½(μλ|νσ)]`, accumulated directly from the
+/// packed shell quartets. Each basis-function integral `(ij|kl)` appears in
+/// exactly one quartet, so no symmetry multiplicities are needed.
+fn accumulate_g(
+    fock: &mut [f64],
+    density: &[f64],
+    quartets: &[PackedQuartet],
+    offsets: &[usize],
+    nb: usize,
+) {
+    for q in quartets {
+        let [a, b, c, d] = q.shells;
+        let [na, nb2, nc, nd] = q.dims;
+        let (oi, oj, ok, ol) = (offsets[a], offsets[b], offsets[c], offsets[d]);
+        let mut idx = 0;
+        #[allow(clippy::needless_range_loop)]
+        for ia in 0..na {
+            for ib in 0..nb2 {
+                for ic in 0..nc {
+                    for id in 0..nd {
+                        let val = q.v[idx];
+                        idx += 1;
+                        let (i, j) = (oi + ia, oj + ib);
+                        let (k, l) = (ok + ic, ol + id);
+                        // Coulomb: G_ij += D_kl (ij|kl).
+                        fock[i * nb + j] += density[k * nb + l] * val;
+                        // Exchange: G_ik −= ½ D_jl (ij|kl).
+                        fock[i * nb + k] -= 0.5 * density[j * nb + l] * val;
+                    }
+                }
+            }
+        }
+    }
+}
 
 /// Run a restricted Hartree–Fock SCF on the molecule with the STO-3G
 /// minimal basis.
@@ -99,7 +172,7 @@ pub fn rhf(mol: &Molecule) -> Result<HfResult, HfError> {
         nb += cartesian_components(sh.l).len();
     }
     if nb > MAX_BASIS {
-        return Err(HfError::NumericalBlowup);
+        return Err(HfError::BasisTooLarge);
     }
     let shell_of = |bf: usize| -> usize {
         offsets
@@ -126,53 +199,63 @@ pub fn rhf(mol: &Molecule) -> Result<HfResult, HfError> {
         }
     }
 
-    // Two-electron ERIs with 8-fold permutation symmetry
-    // (μν|λσ) = (νμ|λσ) = (μν|σλ) = (νμ|σλ) = (λσ|μν) = …: each shell
-    // quartet is computed once (same-center electron-1 swaps skipped) and
-    // written into all eight index permutations.
-    let mut eris = vec![0.0; nb * nb * nb * nb];
-    for (mu, omu) in shells.iter().enumerate() {
-        for (nu, onu) in shells.iter().enumerate() {
-            if (omu.center - onu.center).norm_sq() == 0.0 && mu > nu {
-                continue; // filled by the (nu, mu) pass below
+    // Two-electron integrals: Schwarz-screened packed shell quartets. The
+    // full basis-function tensor `(μν|λσ)` is never materialized; the Fock
+    // build consumes the quartets directly.
+    let ns = shells.len();
+    let comps: Vec<Vec<(u8, u8, u8)>> = shells.iter().map(|s| cartesian_components(s.l)).collect();
+    let mut schwarz = vec![0.0f64; ns * ns];
+    for a in 0..ns {
+        for b in 0..ns {
+            let t = eri_shell(&shells[a], &shells[b], &shells[a], &shells[b]);
+            let q = t
+                .iter()
+                .flatten()
+                .flatten()
+                .flatten()
+                .fold(0.0f64, |m, &x| m.max(x.abs()))
+                .sqrt();
+            schwarz[a * ns + b] = q;
+        }
+    }
+
+    let mut quartets: Vec<PackedQuartet> = Vec::new();
+    for (a, oa) in shells.iter().enumerate() {
+        for (b, ob) in shells.iter().enumerate() {
+            if schwarz[a * ns + b] == 0.0 {
+                continue;
             }
-            for (la, ola) in shells.iter().enumerate() {
-                for (si_, osi) in shells.iter().enumerate() {
-                    let v = eri_shell(omu, onu, ola, osi);
-                    let n_mu = cartesian_components(omu.l).len();
-                    let n_nu = cartesian_components(onu.l).len();
-                    let n_la = cartesian_components(ola.l).len();
-                    #[allow(clippy::needless_range_loop)]
-                    for cu in 0..n_mu {
-                        for cv in 0..n_nu {
-                            for cw in 0..n_la {
-                                for cx in 0..cartesian_components(osi.l).len() {
-                                    let i = offsets[mu] + cu;
-                                    let j = offsets[nu] + cv;
-                                    let k = offsets[la] + cw;
-                                    let l = offsets[si_] + cx;
-                                    let val = v[cu][cv][cw][cx];
-                                    let set = |eris: &mut [f64], a, b, c, d| {
-                                        eris[((a * nb + b) * nb + c) * nb + d] = val;
-                                    };
-                                    set(&mut eris, i, j, k, l);
-                                    set(&mut eris, j, i, k, l);
-                                    set(&mut eris, i, j, l, k);
-                                    set(&mut eris, j, i, l, k);
-                                    set(&mut eris, k, l, i, j);
-                                    set(&mut eris, l, k, i, j);
-                                    set(&mut eris, k, l, j, i);
-                                    set(&mut eris, l, k, j, i);
+            for (c, oc) in shells.iter().enumerate() {
+                for (d, od) in shells.iter().enumerate() {
+                    if schwarz[a * ns + b] * schwarz[c * ns + d] < SCHWARZ_THRESHOLD {
+                        continue;
+                    }
+                    let v = eri_shell(oa, ob, oc, od);
+                    let dims = [
+                        comps[a].len(),
+                        comps[b].len(),
+                        comps[c].len(),
+                        comps[d].len(),
+                    ];
+                    let mut flat = Vec::with_capacity(dims[0] * dims[1] * dims[2] * dims[3]);
+                    for row in &v {
+                        for r2 in row {
+                            for r3 in r2 {
+                                for x in r3 {
+                                    flat.push(*x);
                                 }
                             }
                         }
                     }
+                    quartets.push(PackedQuartet {
+                        shells: [a, b, c, d],
+                        dims,
+                        v: flat,
+                    });
                 }
             }
         }
     }
-    let eri =
-        |i: usize, j: usize, k: usize, l: usize| -> f64 { eris[((i * nb + j) * nb + k) * nb + l] };
 
     // Symmetric orthogonalization X = S^{-1/2}.
     let (s_vals, s_vecs) = jacobi_eigh(&s, nb, 1e-11, 64).map_err(|_| HfError::NumericalBlowup)?;
@@ -190,7 +273,7 @@ pub fn rhf(mol: &Molecule) -> Result<HfResult, HfError> {
     // Occupied orbitals (closed shell): n_elec / 2.
     let n_elec: f64 = nuclei.iter().map(|&(z, _)| z).sum();
     let n_occ = (n_elec / 2.0).round() as usize;
-    if 2.0 * f64::from(n_occ as u8) != n_elec {
+    if 2.0 * n_occ as f64 != n_elec {
         return Err(HfError::UnsupportedElement); // open shell: outside RHF scope
     }
 
@@ -200,19 +283,10 @@ pub fn rhf(mol: &Molecule) -> Result<HfResult, HfError> {
     let e_nuc = nuclear_repulsion(&nuclei);
     let mut converged = false;
     for iteration in 0..128 {
-        // Fock = H + G(D).
+        // Fock = H + G(D), accumulated from the packed quartets: every basis
+        // integral (ij|kl) is visited exactly once, via its own quartet.
         let mut fock = h_core.clone();
-        for i in 0..nb {
-            for j in 0..nb {
-                let mut g = 0.0;
-                for k in 0..nb {
-                    for l in 0..nb {
-                        g += density[k * nb + l] * (eri(i, j, k, l) - 0.5 * eri(i, k, j, l));
-                    }
-                }
-                fock[i * nb + j] += g;
-            }
-        }
+        accumulate_g(&mut fock, &density, &quartets, &offsets, nb);
         // Energy.
         let mut e_elec = 0.0;
         for i in 0..nb {
@@ -239,16 +313,7 @@ pub fn rhf(mol: &Molecule) -> Result<HfResult, HfError> {
         let coeffs = mat_mul(&x_mat, &c_prime, nb);
 
         // New density from the occupied orbitals.
-        let mut d_new = vec![0.0; nb * nb];
-        for i in 0..nb {
-            for j in 0..nb {
-                let mut d = 0.0;
-                for o in 0..n_occ {
-                    d += coeffs[i * nb + o] * coeffs[j * nb + o];
-                }
-                d_new[i * nb + j] = 2.0 * d;
-            }
-        }
+        let d_new = density_from_orbitals(&coeffs, n_occ, nb);
         // Damping for early iterations tames wild core-guess densities.
         let damp = if iteration < 8 { 0.5 } else { 1.0 };
         for i in 0..nb * nb {
@@ -266,17 +331,7 @@ pub fn rhf(mol: &Molecule) -> Result<HfResult, HfError> {
 
     // Final quantities.
     let mut fock = h_core.clone();
-    for i in 0..nb {
-        for j in 0..nb {
-            let mut g = 0.0;
-            for k in 0..nb {
-                for l in 0..nb {
-                    g += density[k * nb + l] * (eri(i, j, k, l) - 0.5 * eri(i, k, j, l));
-                }
-            }
-            fock[i * nb + j] += g;
-        }
-    }
+    accumulate_g(&mut fock, &density, &quartets, &offsets, nb);
     let ft = transpose(&fock, nb);
     let f_prime = mat_mul(&mat_mul(&x_mat, &ft, nb), &x_mat, nb);
     let (eps, c_prime) =
@@ -361,5 +416,22 @@ mod tests {
         let mut na = Molecule::new("Na");
         na.add_atom::<11>(Vec3::ZERO);
         assert_eq!(rhf_energy(&na), Err(HfError::UnsupportedElement));
+    }
+}
+
+#[cfg(test)]
+mod driver_tests {
+    use super::*;
+    use tpt_chem_core::molecule::Molecule;
+
+    #[test]
+    fn basis_too_large_is_a_dedicated_error() {
+        // 258 H atoms → 258 basis functions > MAX_BASIS = 256; the check
+        // fires before any integral work.
+        let mut big = Molecule::new("H258");
+        for i in 0..258 {
+            big.add_atom::<1>(Vec3::new(i as f64 * 3.0, 0.0, 0.0));
+        }
+        assert_eq!(rhf_energy(&big), Err(HfError::BasisTooLarge));
     }
 }

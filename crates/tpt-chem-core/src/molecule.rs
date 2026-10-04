@@ -139,7 +139,7 @@ pub struct Molecule {
     atoms: Vec<Atom>,
     bonds: Vec<Bond>,
     adjacency: Vec<Vec<usize>>,
-    counts: [u8; MAX_Z as usize],
+    counts: [u16; MAX_Z as usize],
 }
 
 impl Default for Molecule {

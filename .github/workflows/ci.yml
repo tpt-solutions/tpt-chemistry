@@ -8,50 +8,88 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+# The workspace depends on the sibling repository `tpt-math` via path deps
+# (`../tpt-math/...`), so every job checks out both repositories side by
+# side: `<workspace>/tpt-chemistry` and `<workspace>/tpt-math`.
 jobs:
   fmt:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: tpt-chemistry
+      - uses: actions/checkout@v4
+        with:
+          repository: tpt-solutions/tpt-math
+          path: tpt-math
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
       - run: cargo fmt --all -- --check
+        working-directory: tpt-chemistry
 
   clippy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: tpt-chemistry
+      - uses: actions/checkout@v4
+        with:
+          repository: tpt-solutions/tpt-math
+          path: tpt-math
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
       - run: cargo clippy --all-targets --all-features -- -D warnings
+        working-directory: tpt-chemistry
 
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: tpt-chemistry
+      - uses: actions/checkout@v4
+        with:
+          repository: tpt-solutions/tpt-math
+          path: tpt-math
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --workspace
+        working-directory: tpt-chemistry
 
   deny:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: tpt-chemistry
+      - uses: actions/checkout@v4
+        with:
+          repository: tpt-solutions/tpt-math
+          path: tpt-math
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-deny
       - run: cargo deny check
+        working-directory: tpt-chemistry
 
   no_std:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: tpt-chemistry
+      - uses: actions/checkout@v4
+        with:
+          repository: tpt-solutions/tpt-math
+          path: tpt-math
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: thumbv6m-none-eabi
       - name: Build tpt-chem-core for a no_std target
         run: cargo build -p tpt-chem-core --target thumbv6m-none-eabi --no-default-features
+        working-directory: tpt-chemistry
 
   # Kani does not support Windows hosts; bounded model checking runs on the
   # Linux CI runner via the harnesses in crates/tpt-chem-verify.
@@ -59,8 +97,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: tpt-chemistry
+      - uses: actions/checkout@v4
+        with:
+          repository: tpt-solutions/tpt-math
+          path: tpt-math
       - uses: dtolnay/rust-toolchain@stable
       - run: |
           cargo install --locked kani-verifier
           cargo kani setup
       - run: cargo kani --workspace
+        working-directory: tpt-chemistry

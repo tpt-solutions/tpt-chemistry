@@ -14,6 +14,23 @@ fn pair_lj(la: &LennardJones, lb: &LennardJones) -> LennardJones {
     LennardJones::mix(la, lb)
 }
 
+/// Pair kernel shared by the all-pairs and neighbor-list evaluators:
+/// Lennard-Jones + Coulomb energy and the radial force magnitude for one
+/// pair at separation `r = sqrt(r2)`.
+///
+/// Returns `(pair_energy, fmag)` with `fmag > 0` repulsive.
+#[inline]
+fn pair_energy_force(sys: &System, a: usize, b: usize, r: f64, r2: f64) -> (f64, f64) {
+    let lj = pair_lj(&sys.lj[a], &sys.lj[b]);
+    let sr6 = (lj.sigma * lj.sigma / r2).powi(3);
+    let e_lj = 4.0 * lj.epsilon * (sr6 * sr6 - sr6);
+    let f_lj = 24.0 * lj.epsilon / r * (2.0 * sr6 * sr6 - sr6);
+    let qq = sys.charge[a] * sys.charge[b];
+    let e_c = COULOMB_PREFACTOR_KJ_ANG * qq / r;
+    let f_c = COULOMB_PREFACTOR_KJ_ANG * qq / r2;
+    (e_lj + e_c, f_lj + f_c)
+}
+
 /// Energy and forces for a full O(N²) all-pairs evaluation.
 ///
 /// `cutoff` (`None` = no truncation) applies plain truncation — the
@@ -38,16 +55,8 @@ pub fn forces_all_pairs(sys: &System, box_: Option<Box3>, cutoff: Option<f64>) -
                 continue;
             }
             let r = r2.sqrt();
-            let lj = pair_lj(&sys.lj[a], &sys.lj[b]);
-            let sr6 = (lj.sigma * lj.sigma / r2).powi(3);
-            let e_lj = 4.0 * lj.epsilon * (sr6 * sr6 - sr6);
-            let f_lj = 24.0 * lj.epsilon / r * (2.0 * sr6 * sr6 - sr6);
-            let qq = sys.charge[a] * sys.charge[b];
-            let e_c = COULOMB_PREFACTOR_KJ_ANG * qq / r;
-            let f_c = COULOMB_PREFACTOR_KJ_ANG * qq / r2;
-            energy += e_lj + e_c;
-            // Radial force magnitude (positive = repulsive) along d̂.
-            let fmag = f_lj + f_c;
+            let (e, fmag) = pair_energy_force(sys, a, b, r, r2);
+            energy += e;
             // fmag > 0 (repulsion) pushes a away from b, i.e. along -d̂.
             let fvec = d * (fmag / r);
             forces[a] -= fvec;
@@ -81,15 +90,8 @@ pub fn forces_neighbor_list(
             continue;
         }
         let r = r2.sqrt();
-        let lj = pair_lj(&sys.lj[a], &sys.lj[b]);
-        let sr6 = (lj.sigma * lj.sigma / r2).powi(3);
-        let e_lj = 4.0 * lj.epsilon * (sr6 * sr6 - sr6);
-        let f_lj = 24.0 * lj.epsilon / r * (2.0 * sr6 * sr6 - sr6);
-        let qq = sys.charge[a] * sys.charge[b];
-        let e_c = COULOMB_PREFACTOR_KJ_ANG * qq / r;
-        let f_c = COULOMB_PREFACTOR_KJ_ANG * qq / r2;
-        energy += e_lj + e_c;
-        let fmag = f_lj + f_c;
+        let (e, fmag) = pair_energy_force(sys, a, b, r, r2);
+        energy += e;
         let fvec = d * (fmag / r);
         forces[a] -= fvec;
         forces[b] += fvec;

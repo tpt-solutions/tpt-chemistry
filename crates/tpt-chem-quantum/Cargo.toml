@@ -1,6 +1,6 @@
 [package]
 name = "tpt-chem-quantum"
-description = "Electronic structure: Gaussian basis sets, Obara-Saika integrals, SCF / Hartree-Fock"
+description = "Electronic structure: Gaussian basis sets, McMurchie-Davidson integrals, SCF / Hartree-Fock"
 keywords = ["quantum-chemistry", "hartree-fock", "scf", "basis-set"]
 categories = ["science"]
 version = "0.1.0"

@@ -253,7 +253,7 @@ pub fn from_symbol(s: &str) -> Option<u8> {
 
 /// Hill-order molecular formula: C and H first (if present), then everything
 /// else alphabetically. E.g. `"H2O"`, `"C2H6O"`.
-pub fn hill_formula(counts: &[u8; MAX_Z as usize]) -> String {
+pub fn hill_formula(counts: &[u16; MAX_Z as usize]) -> String {
     let mut out = Vec::new();
     let carbon = counts[5];
     let hydrogen = counts[0];
@@ -312,12 +312,12 @@ mod tests {
 
     #[test]
     fn hill_formula_counts() {
-        let mut counts = [0u8; MAX_Z as usize];
+        let mut counts = [0u16; MAX_Z as usize];
         counts[5] = 2; // C
         counts[0] = 6; // H
         counts[6] = 1; // N
         assert_eq!(hill_formula(&counts), "C2H6N");
-        let mut water = [0u8; MAX_Z as usize];
+        let mut water = [0u16; MAX_Z as usize];
         water[0] = 2;
         water[7] = 1; // O
         assert_eq!(hill_formula(&water), "H2O");

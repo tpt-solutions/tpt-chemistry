@@ -59,3 +59,11 @@ lto = "fat"
 codegen-units = 1
 strip = "symbols"
 overflow-checks = true
+
+# Benchmarks inherit release optimizations but keep symbol names (flamegraph
+# attribution) and skip fat LTO's long link times.
+[profile.bench]
+inherits = "release"
+lto = "thin"
+strip = "none"
+overflow-checks = false

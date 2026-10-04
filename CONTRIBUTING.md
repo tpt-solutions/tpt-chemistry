@@ -15,11 +15,18 @@ keep the workspace healthy.
 
 ## Getting started
 
+The workspace depends on the sibling `tpt-math` repository through path
+dependencies (`../tpt-math/...`), so clone both repos side by side:
+
 ```sh
-git clone <repo>
+git clone https://github.com/tpt-solutions/tpt-math.git
+git clone <this repo>
 cd tpt-chemistry
 just check     # fmt + clippy + test + cargo deny
 ```
+
+CI checks out `tpt-solutions/tpt-math` into a sibling directory in every
+job; keep that layout locally too or the path deps will not resolve.
 
 A local `just` runner (`justfile`) wraps the common commands: `just fmt`,
 `just clippy`, `just test`, `just deny`, `just no-std`, `just kani`.

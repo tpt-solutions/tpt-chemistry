@@ -143,8 +143,8 @@ electrostatics are deferred to Phase 3 — see `tpt-chem-md` completion below.)
 
 ### Phase 1 exit check
 
-- [ ] `cargo build` + `cargo test` green across the whole workspace
-- [ ] Energy-conservation proptest passes reliably (no flakes across N runs)
+- [x] `cargo build` + `cargo test` green across the whole workspace
+- [x] Energy-conservation proptest passes reliably (no flakes across N runs) — 6 consecutive clean `tpt-chem-verify` runs
 
 ---
 
@@ -198,8 +198,8 @@ reaction kinetics (deterministic + stochastic).*
 
 ### Phase 2 exit check
 
-- [ ] `cargo build` + `cargo test` green across the whole workspace
-- [ ] H₂ HF integration test passes against reference benchmark
+- [x] `cargo build` + `cargo test` green across the whole workspace
+- [x] H₂ HF integration test passes against reference benchmark (and H₂O, He at 1e-6)
 
 ---
 
@@ -259,8 +259,8 @@ electrostatics, and formal (Kani) verification.*
 
 ### Phase 3 exit check
 
-- [ ] `cargo build` + `cargo test` green across the whole workspace
-- [ ] All Kani harnesses pass (bounded model checking green)
+- [x] `cargo build` + `cargo test` green across the whole workspace
+- [ ] All Kani harnesses pass (bounded model checking green) — needs the Linux CI runner
 - [x] PME long-range electrostatics validated against Ewald direct-sum reference: matching wavenumber cutoffs agree to 5.4e-5 relative (32³) and forces to 4e-2 kJ·mol⁻¹·Å⁻¹, with clean 4th-order convergence (error ÷16 per mesh doubling, asserted in tests); PME forces verified as the exact gradient of the mesh energy by central finite differences
 
 ---
@@ -327,32 +327,33 @@ usability/automation, and adoption work. Ordered roughly by priority.*
 
 ### 5.1 Blockers & correctness
 
-- [ ] CI cannot build: path deps on `../tpt-math/...` don't exist on the
-      runner. Check out `tpt-math` as a second repo in every CI job, or
-      switch to git/crates.io deps
-- [ ] Document the sibling-repo prerequisite (`../tpt-math`) in README and
+- [x] CI cannot build: path deps on `../tpt-math/...` — every CI job now
+      checks out `tpt-solutions/tpt-math` into a sibling directory
+- [x] Document the sibling-repo prerequisite (`../tpt-math`) in README and
       CONTRIBUTING so fresh clones build
-- [ ] Tick the Phase 1/2/3 exit-check boxes now that build + tests pass;
-      run proptest flake check across N runs
-- [ ] Kani proof: SCF density matrices remain positive semi-definite
-- [ ] Kani proof: no panics in ERI evaluation (r→0 handling)
+- [x] Tick the Phase 1/2/3 exit-check boxes now that build + tests pass;
+      proptest flake check: 6 consecutive clean runs
+- [x] Kani proof: SCF density matrices remain positive semi-definite
+      (`scf_density_is_psd` — the density construction is extracted into
+      `density_from_orbitals` so the harness proves the actual code)
+- [x] Kani proof: no panics in ERI evaluation (r→0 handling)
+      (`eri_r_zero_no_panic`, `eri_p_shell_coincident_no_panic`)
 - [ ] Run and confirm all Kani harnesses pass on Linux CI
-- [ ] `rhf`: return a dedicated error (not `NumericalBlowup`) when the basis
-      exceeds `MAX_BASIS`
-- [ ] `rhf`: remove `f64::from(n_occ as u8)` truncation (breaks for n_occ ≥ 256)
-- [ ] `rhf`: replace dense `nb⁴` ERI array with screened/packed storage
-      (Schwarz screening) and raise the 128-function cap
-- [ ] MD: de-duplicate the pair-force kernel shared by `forces_all_pairs` and
-      `forces_neighbor_list`
-- [ ] MD: `berendsen_barostat` must invalidate/rebuild the Verlet list after
-      rescaling the box and positions
+- [x] `rhf`: dedicated `HfError::BasisTooLarge` when the basis exceeds
+      `MAX_BASIS` (tested)
+- [x] `rhf`: removed the `f64::from(n_occ as u8)` truncation
+- [x] `rhf`: dense `nb⁴` ERI array replaced with Schwarz-screened packed
+      shell quartets (`accumulate_g`); memory is O(N²) per SCF plus the
+      screened quartets; `MAX_BASIS` raised 128 → 256
+- [x] MD: pair-force kernel de-duplicated (`pair_energy_force`)
+- [x] MD: `berendsen_barostat` invalidates the Verlet list (new
+      `VerletList::invalidate` + `stale` flag; `needs_update` honors it;
+      tested)
 - [ ] Audit ~60 non-test `unwrap`/`expect`/`panic!` in library code; convert
       to `Result` or document invariants
-- [ ] Fix stale docs: README and `tpt-chem-quantum` Cargo description say
-      "Obara–Saika" (now McMurchie–Davidson); README says "DFT groundwork"
-      but no DFT exists
-- [ ] Add a separate `[profile.bench]` so `lto = "fat"` / `strip` don't slow
-      library benchmark builds
+- [x] Fixed stale docs: README and `tpt-chem-quantum` Cargo/lib docs now
+      say McMurchie–Davidson; the "DFT groundwork" claim was removed
+- [x] Added `[profile.bench]` (thin LTO, symbols kept, no overflow checks)
 
 ### 5.2 Missing features
 

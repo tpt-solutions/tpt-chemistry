@@ -28,8 +28,15 @@ pub fn berendsen_thermostat(sys: &mut System, target_t: f64, tau: f64, dt: f64) 
 /// The simple form scales fractional coordinates by μ³ where
 /// μ = [1 − κ(Δt/τ)(P₀ − P)]^{1/3}, with the compressibility κ folded into
 /// the caller-chosen `compressibility` (bar⁻¹); pressures in bar.
+///
+/// `neighbors` — a [`VerletList`](crate::neighbors::VerletList) in use for
+/// force evaluation, if any. The
+/// rescale moves every atom relative to the list's stored reference
+/// positions (which the half-skin displacement check cannot see), so the
+/// list is invalidated and rebuilt on the next force step.
 pub fn berendsen_barostat(
     sys: &mut System,
+    neighbors: Option<&mut crate::neighbors::VerletList>,
     target_p: f64,
     current_p: f64,
     tau: f64,
@@ -46,6 +53,9 @@ pub fn berendsen_barostat(
     }
     for p in &mut sys.pos {
         *p = *p * mu;
+    }
+    if let Some(nl) = neighbors {
+        nl.invalidate();
     }
 }
 
@@ -251,5 +261,39 @@ mod tests {
         // (Leapfrog drifts with v(t+½), Verlet with v(t+½) after the same
         // kick — the Δ(a·Δt²) offset is O(dt²) and negligible).
         assert!(diff < 2e-6, "max |Δx| = {diff}");
+    }
+}
+
+#[cfg(test)]
+mod barostat_tests {
+    use super::berendsen_barostat;
+    use crate::neighbors::VerletList;
+    use crate::system::System;
+    use tpt_chem_core::forcefield::LennardJones;
+    use tpt_chem_core::vec3::Vec3;
+
+    #[test]
+    fn barostat_invalidates_verlet_list() {
+        let mut sys = System::new();
+        let lj = LennardJones {
+            sigma: 3.4,
+            epsilon: 0.997,
+        };
+        sys.add_atom(lj, 0.0, 39.95, Vec3::new(0.0, 0.0, 0.0));
+        sys.add_atom(lj, 0.0, 39.95, Vec3::new(4.0, 0.0, 0.0));
+        let box_ = crate::box3::Box3::cubic(20.0);
+        sys.box_ = Some(box_);
+        let mut vl = VerletList::build(&sys.pos, 6.0, 1.0, Some(box_));
+        // Fresh list, atoms untouched: no rebuild needed.
+        assert!(!vl.needs_update(&sys.pos, sys.box_));
+        // A barostat rescale moves atoms relative to the list reference and
+        // resizes the box; the list must be invalidated.
+        berendsen_barostat(&mut sys, Some(&mut vl), 1.0, 100.0, 100.0, 0.1, 1e-5);
+        assert!((sys.pos[0].x - 0.0).abs() > 0.0 || sys.box_.unwrap().length.x != 20.0);
+        assert!(vl.needs_update(&sys.pos, sys.box_));
+        // Without a list the rescale still works.
+        let pos_before = sys.pos[1].x;
+        berendsen_barostat(&mut sys, None, 1.0, 100.0, 100.0, 0.1, 1e-5);
+        assert!(sys.pos[1].x != pos_before);
     }
 }

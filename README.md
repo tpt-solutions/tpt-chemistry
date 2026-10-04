@@ -2,16 +2,33 @@
 
 A pure-Rust, AI-native computational chemistry and molecular simulation
 library: molecular dynamics (MD), quantum chemistry primitives
-(Hartree–Fock/DFT groundwork), reaction kinetics, and crystallography —
-**without C/C++ FFI or external solver dependencies**.
+(Hartree–Fock with Gaussian basis sets), reaction kinetics, and
+crystallography — **without C/C++ FFI or external solver dependencies**.
 
-No LAMMPS. No Gaussian. No Quantum ESPRESSO. SCF iteration, electron
-repulsion integrals, Ewald summation, and neighbor lists are all implemented
-from scratch, leaning on the sibling [`tpt-math`](../tpt-math) crates for
-linear algebra and FFTs.
+No LAMMPS. No Gaussian. No Quantum ESPRESSO. SCF iteration, McMurchie–
+Davidson electron-repulsion integrals, Ewald summation, Particle Mesh Ewald
+(on an in-house radix-2 FFT), and neighbor lists are all implemented from
+scratch, leaning on the sibling [`tpt-math`](../tpt-math) crates for
+typed units and numeric utilities.
 
 Part of the TPT science stack. Full design rationale lives in
 [`spec.txt`](spec.txt); the build progress in [`todo.md`](todo.md).
+
+## Building
+
+This workspace depends on the sibling repository
+[`tpt-math`](https://github.com/tpt-solutions/tpt-math) via path
+dependencies (`../tpt-math/...`), so a fresh clone needs both checkouts
+side by side:
+
+```sh
+git clone https://github.com/tpt-solutions/tpt-math.git
+git clone <this repo> && cd tpt-chemistry
+cargo build && cargo test
+```
+
+CI performs the same sibling checkout in every job (see
+`.github/workflows/ci.yml`).
 
 ## Design principles
 
@@ -34,7 +51,7 @@ Part of the TPT science stack. Full design rationale lives in
 |---|---|
 | [`tpt-chem-core`](crates/tpt-chem-core) | Molecular graphs, force fields, physical constants, unit-safe types |
 | [`tpt-chem-md`](crates/tpt-chem-md) | Integrators (Velocity Verlet, Leapfrog), thermostats, cell/neighbor lists, Ewald and Particle Mesh Ewald (in-house radix-2 FFT + cubic B-splines) |
-| [`tpt-chem-quantum`](crates/tpt-chem-quantum) | Gaussian basis sets, Obara–Saika ERIs, SCF / Hartree–Fock |
+| [`tpt-chem-quantum`](crates/tpt-chem-quantum) | Gaussian basis sets, McMurchie–Davidson ERIs, SCF / Hartree–Fock |
 | [`tpt-chem-kinetics`](crates/tpt-chem-kinetics) | Mass-action ODEs, Gillespie SSA, Arrhenius/Eyring rates |
 | [`tpt-chem-crystal`](crates/tpt-chem-crystal) | Bravais lattices, space groups, reciprocal space, XRD simulation |
 | [`tpt-chem-io`](crates/tpt-chem-io) | XYZ, PDB, MOL2, CIF readers/writers, trajectory streaming |
@@ -46,7 +63,8 @@ Part of the TPT science stack. Full design rationale lives in
 - **`tpt-materials`** — micro-to-macro: MD/DFT results feed homogenized
   properties (elastic constants, thermal conductivity).
 - **`tpt-math`** — dense linear algebra and ODE machinery.
-- **`tpt-dsp` / `tpt-math-signal-fft`** — 3D FFTs for Particle Mesh Ewald and
+- **`tpt-dsp`** (future) — could replace the in-house 3D FFT behind PME;
+  currently `tpt-math-signal-fft` — FFT utilities (PME ships its own in-house radix-2 transform)
   vibrational density of states.
 - **`tpt-fem` / `tpt-physics`** — QM/MM coupling of the quantum region into
   continuum FEM/CFD environments.
