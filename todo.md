@@ -317,3 +317,123 @@ re-export crate and a full workspace hygiene pass.*
 - [ ] Kani proofs run only on Linux CI (no Windows host support); harnesses
       are written and compile-gated behind `#[cfg(kani)]`.
 - [x] PME-vs-Ewald validation test (Phase 3 exit): `pme_matches_ewald_with_matching_wavenumber_cutoff` and `pme_converges_to_ewald_as_mesh_refines` in `crates/tpt-chem-md/src/pme.rs`.
+
+---
+
+## Phase 5 — Platform Review Follow-ups (2026-10-05)
+
+*Outcome of the platform review: bugs, missing features, innovation,
+usability/automation, and adoption work. Ordered roughly by priority.*
+
+### 5.1 Blockers & correctness
+
+- [ ] CI cannot build: path deps on `../tpt-math/...` don't exist on the
+      runner. Check out `tpt-math` as a second repo in every CI job, or
+      switch to git/crates.io deps
+- [ ] Document the sibling-repo prerequisite (`../tpt-math`) in README and
+      CONTRIBUTING so fresh clones build
+- [ ] Tick the Phase 1/2/3 exit-check boxes now that build + tests pass;
+      run proptest flake check across N runs
+- [ ] Kani proof: SCF density matrices remain positive semi-definite
+- [ ] Kani proof: no panics in ERI evaluation (r→0 handling)
+- [ ] Run and confirm all Kani harnesses pass on Linux CI
+- [ ] `rhf`: return a dedicated error (not `NumericalBlowup`) when the basis
+      exceeds `MAX_BASIS`
+- [ ] `rhf`: remove `f64::from(n_occ as u8)` truncation (breaks for n_occ ≥ 256)
+- [ ] `rhf`: replace dense `nb⁴` ERI array with screened/packed storage
+      (Schwarz screening) and raise the 128-function cap
+- [ ] MD: de-duplicate the pair-force kernel shared by `forces_all_pairs` and
+      `forces_neighbor_list`
+- [ ] MD: `berendsen_barostat` must invalidate/rebuild the Verlet list after
+      rescaling the box and positions
+- [ ] Audit ~60 non-test `unwrap`/`expect`/`panic!` in library code; convert
+      to `Result` or document invariants
+- [ ] Fix stale docs: README and `tpt-chem-quantum` Cargo description say
+      "Obara–Saika" (now McMurchie–Davidson); README says "DFT groundwork"
+      but no DFT exists
+- [ ] Add a separate `[profile.bench]` so `lto = "fat"` / `strip` don't slow
+      library benchmark builds
+
+### 5.2 Missing features
+
+**Quantum (`tpt-chem-quantum`)**
+- [ ] Charge and spin multiplicity inputs
+- [ ] UHF / ROHF (radicals, ions, open shells)
+- [ ] Analytic nuclear gradients
+- [ ] Geometry optimisation (uses gradients)
+- [ ] Larger basis sets (6-31G, cc-pVDZ), heavier elements
+- [ ] Orbital output (cube / molden)
+
+**MD (`tpt-chem-md`)**
+- [ ] Bonded forces (harmonic bonds, angles, RB dihedrals) in `System`
+- [ ] Wire Ewald/PME into `System` and the integrators
+- [ ] Exclusion lists and 1-4 scaling
+- [ ] Pressure / virial computation (needed by the barostat)
+- [ ] Energy minimisation (steepest descent / L-BFGS)
+- [ ] Constraints: SHAKE / RATTLE
+- [ ] Ready-made NVT / NPT run loops
+- [ ] Observables: RDF, MSD, diffusion coefficient, VACF/VDOS
+- [ ] Force-field parameter library (OPLS/AMBER/UFF subset, SPC/TIP3P water)
+- [ ] Topology builder: bond perception from geometry, atom-type assignment
+
+**Kinetics (`tpt-chem-kinetics`)**
+- [ ] Tau-leaping and next-reaction-method SSA
+- [ ] Parameter fitting and sensitivity analysis
+
+**Crystal (`tpt-chem-crystal`)**
+- [ ] Full 230 space groups (generate from Hall symbols)
+- [ ] CIF → structure → XRD pipeline helper
+- [ ] Supercell and slab builders
+
+**I/O (`tpt-chem-io`)**
+- [ ] `.gro`, SDF, SMILES readers/writers
+- [ ] Binary trajectories (DCD / XTC)
+
+### 5.3 Innovation
+
+- [ ] Python bindings (PyO3 + maturin), ASE/MDAnalysis interop
+- [ ] WASM build and a browser demo ("run HF in your browser")
+- [ ] ASE-style `Calculator` / `Potential` trait (energy + forces) shared by
+      MD, HF and ML potentials
+- [ ] ML interatomic-potential plug-in (pure-Rust MLP or ONNX) driving the
+      same integrators
+- [ ] Autodiff hooks for differentiable molecular design (per README promise)
+- [ ] Published validation/benchmark table (reference energies, energy-drift
+      plots)
+- [ ] Run manifest (versions, seed, params) written alongside every output
+- [ ] Optional `rayon` feature for ERI shell quartets and force loops
+
+### 5.4 Usability & automation
+
+- [ ] `tpt-chem` CLI: `hf`, `md`, `xrd`, `kinetics` subcommands with
+      TOML/JSON inputs
+- [ ] Feature-gated `serde` support for `Molecule`, `System`, result structs
+- [ ] Per-crate `prelude` modules and a `System` builder
+- [ ] CI: criterion benchmark job with regression alerts
+- [ ] CI: `cargo doc -D warnings`, MSRV check, `cargo semver-checks`,
+      Dependabot, `cargo llvm-cov` coverage
+- [ ] Release automation (`release-plz` / `cargo-release`) and lifting the
+      "publishing out of scope" decision
+- [ ] `justfile` targets: `doc`, `examples`, `bench`
+
+### 5.5 Adoption: examples, templates, docs
+
+- [ ] `examples/` in the umbrella crate, each runnable via
+      `cargo run --example <name>`:
+  - [ ] `h2_hf` (bond-length scan / PES)
+  - [ ] `water_hf` (orbitals and energies)
+  - [ ] `lj_argon_nve` (energy drift)
+  - [ ] `nacl_pme` (Ewald vs PME)
+  - [ ] `lotka_volterra_ssa` and `michaelis_menten` (stochastic vs deterministic)
+  - [ ] `silicon_xrd` / `nacl_xrd` (CSV pattern output)
+  - [ ] `cif_to_xrd` (end-to-end file I/O pipeline)
+- [ ] Starter template (`cargo generate` / GitHub template repo) that loads
+      an XYZ and runs a job
+- [ ] `data/` folder of sample structures (water, benzene, argon box, NaCl,
+      silicon in XYZ/PDB/CIF)
+- [ ] mdBook tutorial: 5-minute quick start, "which crate do I need?" table,
+      units cheat-sheet (Å/kJ·mol⁻¹/fs vs Bohr/Hartree), validation page
+- [ ] Jupyter notebooks (Binder/Colab) once Python bindings exist
+- [ ] README upgrade: badges, status/accuracy table, feature matrix vs
+      LAMMPS/PySCF/GROMACS
+- [ ] "Common mistakes" doc section (Å vs Bohr mix-ups, etc.)
