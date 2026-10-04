@@ -186,7 +186,9 @@ impl XrdSimulator {
         // Merge symmetry-equivalent reflections (same 2θ within tolerance):
         // powder rings add intensities; the reported Miller index is the
         // family member with the largest h+k+l (prefers all-positive).
-        raw.sort_by(|a, b| a.2.partial_cmp(&b.2).unwrap());
+        // total_cmp: deterministic ordering even if a degenerate input
+        // ever produced a NaN two-theta.
+        raw.sort_by(|a, b| a.2.total_cmp(&b.2));
         let mut merged: Vec<(Miller, f64, f64, f64)> = Vec::new();
         for (m, d, tt, inten) in raw {
             match merged.last_mut() {

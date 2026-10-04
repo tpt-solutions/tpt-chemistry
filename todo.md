@@ -349,8 +349,15 @@ usability/automation, and adoption work. Ordered roughly by priority.*
 - [x] MD: `berendsen_barostat` invalidates the Verlet list (new
       `VerletList::invalidate` + `stale` flag; `needs_update` honors it;
       tested)
-- [ ] Audit ~60 non-test `unwrap`/`expect`/`panic!` in library code; convert
-      to `Result` or document invariants
+- [x] Audit non-test `unwrap`/`expect`/`panic!` in library code (actual
+      count ~10 after excluding doctests/tests): NaN-sensitive
+      `partial_cmp().unwrap()` sorts in `xrd` and `wigner` switched to
+      `f64::total_cmp`; the `bravais` zero-volume reciprocal panic is now a
+      documented `# Panics` contract on both public constructors; the
+      remaining three (`Vec3` index-out-of-range, `hf` `shell_of`,
+      `ssa` initial-state `expect`s) are structural invariants with
+      explanatory messages; input-dependent failures already return
+      `Result` (`io` parsers, `hf`, `basis`, `linalg`).
 - [x] Fixed stale docs: README and `tpt-chem-quantum` Cargo/lib docs now
       say McMurchie–Davidson; the "DFT groundwork" claim was removed
 - [x] Added `[profile.bench]` (thin LTO, symbols kept, no overflow checks)

@@ -181,7 +181,7 @@ impl WignerSeitzCell {
                 let bb = (*b - center).normalize();
                 let ang_a = num::atan2(aa.dot(u1), aa.dot(u0));
                 let ang_b = num::atan2(bb.dot(u1), bb.dot(u0));
-                ang_a.partial_cmp(&ang_b).unwrap()
+                ang_a.total_cmp(&ang_b)
             });
             for i in 0..sorted.len() {
                 let a = sorted[i];

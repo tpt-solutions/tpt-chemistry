@@ -138,6 +138,10 @@ impl Lattice {
     /// Reciprocal lattice `bᵢ = 2π (a_j × a_k)/V` (without the 2π in
     /// [`ReciprocalLattice`]; this one carries the 2π, crystallographic
     /// convention uses 1/d — see [`Lattice::reciprocal_no_2pi`]).
+    ///
+    /// # Panics
+    /// Panics on a degenerate (zero-volume) lattice, where the reciprocal
+    /// is undefined. The lattice vectors are caller input.
     pub fn reciprocal(&self) -> ReciprocalLattice {
         let v = self.volume_with_sign();
         ReciprocalLattice {
@@ -149,6 +153,10 @@ impl Lattice {
 
     /// Reciprocal vectors *without* the 2π factor (crystallographic
     /// convention: `aᵢ·aⱼ* = δᵢⱼ`), for fractional↔Cartesian conversion.
+    ///
+    /// # Panics
+    /// Panics on a degenerate (zero-volume) lattice, where the reciprocal
+    /// is undefined. The lattice vectors are caller input.
     pub fn reciprocal_no_2pi(&self) -> ReciprocalLattice {
         let v = self.volume_with_sign();
         ReciprocalLattice {
