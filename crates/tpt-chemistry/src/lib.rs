@@ -43,6 +43,22 @@ pub use tpt_chem_quantum;
 #[cfg(feature = "verify")]
 pub use tpt_chem_verify;
 
+/// Short aliases for the constituent crates (`tpt_chemistry::md`, …).
+#[cfg(feature = "core")]
+pub use tpt_chem_core as core;
+#[cfg(feature = "crystal")]
+pub use tpt_chem_crystal as crystal;
+#[cfg(feature = "io")]
+pub use tpt_chem_io as io;
+#[cfg(feature = "kinetics")]
+pub use tpt_chem_kinetics as kinetics;
+#[cfg(feature = "md")]
+pub use tpt_chem_md as md;
+#[cfg(feature = "quantum")]
+pub use tpt_chem_quantum as quantum;
+#[cfg(feature = "verify")]
+pub use tpt_chem_verify as verify;
+
 /// Re-exports of the most-used types (behind the `core` feature).
 #[cfg(feature = "core")]
 pub mod prelude {

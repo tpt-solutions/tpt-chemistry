@@ -5,3 +5,7 @@ Cargo.lock
 .idea/
 .vscode/
 *.log
+
+# example outputs
+*.molden
+water_sto3g.molden

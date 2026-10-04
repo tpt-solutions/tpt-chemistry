@@ -210,3 +210,178 @@ mod tests {
         }
     }
 }
+
+/// Configurable force evaluation for a [`System`] — pairs the ensemble run
+/// loops (`crate::ensemble`) with a single, self-consistent energy/force
+/// definition.
+#[derive(Clone, Copy, Debug)]
+pub enum ForceModel {
+    /// Lennard-Jones + direct Coulomb over all pairs, optionally truncated
+    /// at `cutoff` (Å).
+    AllPairs {
+        /// Pair cutoff (Å); `None` evaluates every pair.
+        cutoff: Option<f64>,
+    },
+    /// Lennard-Jones (truncated) + full Ewald Coulomb: real-space erfc
+    /// pairs, reciprocal structure-factor sum, self term.
+    LjPlusEwald {
+        /// LJ cutoff (Å).
+        lj_cutoff: f64,
+        /// Ewald parameters; α must match a reasonably converged set.
+        ewald: crate::ewald::EwaldParams,
+    },
+    /// Lennard-Jones (truncated) + PME Coulomb: real-space erfc pairs,
+    /// mesh reciprocal, self term. O(N log N) in the reciprocal part.
+    LjPlusPme {
+        /// LJ cutoff (Å).
+        lj_cutoff: f64,
+        /// PME parameters; α must match the real-space splitting.
+        pme: crate::pme::PmeParams,
+    },
+}
+
+impl ForceModel {
+    /// Evaluate energy and forces for `sys`.
+    pub fn evaluate(&self, sys: &System) -> (Vec<Vec3>, f64) {
+        match *self {
+            ForceModel::AllPairs { cutoff } => forces_all_pairs(sys, sys.box_, cutoff),
+            ForceModel::LjPlusEwald { lj_cutoff, ewald } => {
+                self.lj_longrange(sys, lj_cutoff, |b| {
+                    crate::ewald::ewald_energy_forces(&sys.pos, &sys.charge, b, &ewald)
+                })
+            }
+            ForceModel::LjPlusPme { lj_cutoff, pme } => self.lj_longrange(sys, lj_cutoff, |b| {
+                crate::pme::pme_reciprocal_energy_forces(&sys.pos, &sys.charge, b, &pme)
+            }),
+        }
+    }
+
+    /// LJ all-pairs (truncated at `lj_cutoff`) combined with a
+    /// long-range Coulomb evaluator over the box.
+    fn lj_longrange(
+        &self,
+        sys: &System,
+        lj_cutoff: f64,
+        longrange: impl FnOnce(&crate::box3::Box3) -> (Vec<Vec3>, f64),
+    ) -> (Vec<Vec3>, f64) {
+        let n = sys.len();
+        let mut forces = vec![Vec3::ZERO; n];
+        let mut energy = 0.0;
+        let cut2 = lj_cutoff * lj_cutoff;
+        if let Some(b) = sys.box_ {
+            for a in 0..n {
+                for c in (a + 1)..n {
+                    let d = b.min_image(sys.pos[c] - sys.pos[a]);
+                    let r2 = d.norm_sq();
+                    if r2 >= cut2 || r2 < 1e-12 {
+                        continue;
+                    }
+                    let r = r2.sqrt();
+                    let lj = pair_lj(&sys.lj[a], &sys.lj[c]);
+                    let sr6 = (lj.sigma * lj.sigma / r2).powi(3);
+                    energy += 4.0 * lj.epsilon * (sr6 * sr6 - sr6);
+                    let fmag = 24.0 * lj.epsilon / r * (2.0 * sr6 * sr6 - sr6);
+                    let fvec = d * (fmag / r);
+                    forces[a] -= fvec;
+                    forces[c] += fvec;
+                }
+            }
+            let (f_lr, e_lr) = longrange(&b);
+            for (f, flr) in forces.iter_mut().zip(f_lr.iter()) {
+                *f += *flr;
+            }
+            energy += e_lr;
+        }
+        (forces, energy)
+    }
+
+    /// Virial `W = Σ_pairs r·f` of the modeled interactions (kJ·mol⁻¹),
+    /// consistent with [`ForceModel::evaluate`] (for the mesh model, to the
+    /// PME discretization level). Feeds [`crate::ensemble::pressure_bar`].
+    pub fn virial(&self, sys: &System) -> f64 {
+        match *self {
+            ForceModel::AllPairs { cutoff } => virial_all_pairs(sys, sys.box_, cutoff),
+            ForceModel::LjPlusEwald { lj_cutoff, ewald } => {
+                self.lj_virial(sys, lj_cutoff)
+                    + crate::ewald::ewald_virial(
+                        &sys.pos,
+                        &sys.charge,
+                        sys.box_.as_ref().unwrap_or(&DUMMY_BOX),
+                        &ewald,
+                    )
+            }
+            ForceModel::LjPlusPme { lj_cutoff, pme } => {
+                self.lj_virial(sys, lj_cutoff) + pme_virial(sys, &pme)
+            }
+        }
+    }
+
+    fn lj_virial(&self, sys: &System, lj_cutoff: f64) -> f64 {
+        let n = sys.len();
+        let mut w = 0.0;
+        let cut2 = lj_cutoff * lj_cutoff;
+        if let Some(b) = sys.box_ {
+            for a in 0..n {
+                for c in (a + 1)..n {
+                    let d = b.min_image(sys.pos[c] - sys.pos[a]);
+                    let r2 = d.norm_sq();
+                    if r2 >= cut2 || r2 < 1e-12 {
+                        continue;
+                    }
+                    let r = r2.sqrt();
+                    let lj = pair_lj(&sys.lj[a], &sys.lj[c]);
+                    let sr6 = (lj.sigma * lj.sigma / r2).powi(3);
+                    let fmag = 24.0 * lj.epsilon / r * (2.0 * sr6 * sr6 - sr6);
+                    w += r * fmag;
+                }
+            }
+        }
+        w
+    }
+}
+
+/// Zero-length placeholder for open-boundary systems, where the long-range
+/// Coulomb is zero anyway (no box → no periodic electrostatics).
+static DUMMY_BOX: crate::box3::Box3 = crate::box3::Box3 {
+    length: Vec3::new(1.0, 1.0, 1.0),
+};
+
+/// Mesh-model virial: LJ part plus `−Σ rᵢ·Fᵢ` of the PME reciprocal forces
+/// (wrap-safe for net-neutral systems).
+fn pme_virial(sys: &System, pme: &crate::pme::PmeParams) -> f64 {
+    let Some(b) = sys.box_ else { return 0.0 };
+    let (f, _) = crate::pme::pme_reciprocal_energy_forces(&sys.pos, &sys.charge, &b, pme);
+    let mut w = 0.0;
+    for (r, fi) in sys.pos.iter().zip(f.iter()) {
+        w -= r.dot(*fi);
+    }
+    w
+}
+
+/// Virial of the truncated LJ + direct Coulomb pair sum,
+/// `W = Σ_pairs r·f(r)` (kJ·mol⁻¹).
+pub fn virial_all_pairs(sys: &System, box_: Option<Box3>, cutoff: Option<f64>) -> f64 {
+    let n = sys.len();
+    let mut w = 0.0;
+    let cut = cutoff.unwrap_or(f64::INFINITY);
+    for a in 0..n {
+        for b in (a + 1)..n {
+            let raw = sys.pos[b] - sys.pos[a];
+            let d = match box_ {
+                Some(bx) => bx.min_image(raw),
+                None => raw,
+            };
+            let r2 = d.norm_sq();
+            if r2 >= cut * cut || r2 < 1e-12 {
+                continue;
+            }
+            let r = r2.sqrt();
+            let lj = pair_lj(&sys.lj[a], &sys.lj[b]);
+            let sr6 = (lj.sigma * lj.sigma / r2).powi(3);
+            let f_lj = 24.0 * lj.epsilon / r * (2.0 * sr6 * sr6 - sr6);
+            let f_c = COULOMB_PREFACTOR_KJ_ANG * sys.charge[a] * sys.charge[b] / r2;
+            w += r * (f_lj + f_c);
+        }
+    }
+    w
+}

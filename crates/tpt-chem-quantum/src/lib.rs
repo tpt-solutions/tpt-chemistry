@@ -38,3 +38,4 @@ pub mod gaussian;
 pub mod hf;
 pub mod integrals;
 pub mod linalg;
+pub mod molden;

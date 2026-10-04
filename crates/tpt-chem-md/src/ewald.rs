@@ -84,6 +84,99 @@ pub fn ewald_real_space(
     (forces, energy)
 }
 
+/// Reciprocal-space part of the Ewald sum: the structure-factor sum over
+/// `|g| ≤ g_max`. Returned as `(forces, energy)`.
+pub fn ewald_reciprocal(
+    pos: &[Vec3],
+    charges: &[f64],
+    box_: &Box3,
+    params: &EwaldParams,
+) -> (Vec<Vec3>, f64) {
+    let box_inv = box_.length;
+    let nmax = [
+        (params.g_max * box_inv.x / (2.0 * core::f64::consts::PI)).ceil() as i64 + 1,
+        (params.g_max * box_inv.y / (2.0 * core::f64::consts::PI)).ceil() as i64 + 1,
+        (params.g_max * box_inv.z / (2.0 * core::f64::consts::PI)).ceil() as i64 + 1,
+    ];
+    let two_pi = 2.0 * core::f64::consts::PI;
+    let mut g_list: Vec<(Vec3, f64)> = Vec::new();
+    for h in -nmax[0]..=nmax[0] {
+        for k in -nmax[1]..=nmax[1] {
+            for l in -nmax[2]..=nmax[2] {
+                if h == 0 && k == 0 && l == 0 {
+                    continue;
+                }
+                let gv = Vec3::new(
+                    two_pi * h as f64 / box_inv.x,
+                    two_pi * k as f64 / box_inv.y,
+                    two_pi * l as f64 / box_inv.z,
+                );
+                let g2 = gv.norm_sq();
+                if g2 <= params.g_max * params.g_max {
+                    g_list.push((gv, g2));
+                }
+            }
+        }
+    }
+
+    let mut forces = vec![Vec3::ZERO; pos.len()];
+    let mut energy = 0.0;
+    // Structure factors S(g) = Σ q_j e^{i g·r_j}.
+    for &(gv, g2) in &g_list {
+        let mut s_re = 0.0;
+        let mut s_im = 0.0;
+        for (r, &q) in pos.iter().zip(charges.iter()) {
+            let phase = gv.dot(*r);
+            s_re += q * phase.cos();
+            s_im += q * phase.sin();
+        }
+        let factor = (-g2 / (4.0 * params.alpha * params.alpha)).exp() / g2;
+        // E_recip = prefac × (2π/V) × e^{−g²/4α²}/g² × |S(g)|².
+        energy += COULOMB_PREFACTOR_KJ_ANG * factor * two_pi / box_.volume()
+            * (s_re * s_re + s_im * s_im);
+        let c = COULOMB_PREFACTOR_KJ_ANG * factor * 2.0 / box_.volume() * two_pi;
+        for ((f, r), &q) in forces.iter_mut().zip(pos.iter()).zip(charges.iter()) {
+            let phase = gv.dot(*r);
+            // −∂E/∂r_i = +prefac × factor × 2/V × 2π g × [q sin + q cos]…
+            let contrib = c * q * (s_re * phase.sin() - s_im * phase.cos());
+            *f += gv * contrib;
+        }
+    }
+    (forces, energy)
+}
+
+/// Virial of the Ewald Coulomb sum (kJ·mol⁻¹): the real-space pair term
+/// `Σ r·f` plus the reciprocal term `−Σ rᵢ·Fᵢ` (the latter is
+/// wrapping-invariant for net-neutral systems, where Σ Fᵢ = 0).
+pub fn ewald_virial(pos: &[Vec3], charges: &[f64], box_: &Box3, params: &EwaldParams) -> f64 {
+    let alpha2 = params.alpha * params.alpha;
+    let mut w = 0.0;
+    // Real-space: erfc-screened pairs.
+    for i in 0..pos.len() {
+        for j in (i + 1)..pos.len() {
+            let d = box_.min_image(pos[j] - pos[i]);
+            let r2 = d.norm_sq();
+            if r2 >= params.r_cutoff * params.r_cutoff || r2 < 1e-12 {
+                continue;
+            }
+            let r = r2.sqrt();
+            let qq = charges[i] * charges[j];
+            let erfc_br = special::erfc(params.alpha * r);
+            let f_mag = COULOMB_PREFACTOR_KJ_ANG
+                * qq
+                * (erfc_br / r2
+                    + 2.0 * params.alpha / core::f64::consts::PI.sqrt() * (-alpha2 * r2).exp() / r);
+            w += r * f_mag;
+        }
+    }
+    // Reciprocal: −Σ rᵢ·Fᵢ.
+    let (recip_f, _) = ewald_reciprocal(pos, charges, box_, params);
+    for (r, f) in pos.iter().zip(recip_f.iter()) {
+        w -= r.dot(*f);
+    }
+    w
+}
+
 /// Self term of the Ewald sum: `−α/√π Σ q²` (tin-foil boundary conditions).
 pub fn ewald_self_energy(charges: &[f64], alpha: f64) -> f64 {
     let q2: f64 = charges.iter().map(|q| q * q).sum();
@@ -112,58 +205,13 @@ pub fn ewald_energy_forces(
         *f += *rf;
     }
     let mut energy = real_energy;
-    let alpha2 = alpha * alpha;
 
-    // ---- Reciprocal space: structure-factor sum over |g| ≤ g_max.
-    // Enumerate integer Miller indices within the sphere.
-    let box_inv = box_.length;
-    let nmax = [
-        (params.g_max * box_inv.x / (2.0 * core::f64::consts::PI)).ceil() as i64 + 1,
-        (params.g_max * box_inv.y / (2.0 * core::f64::consts::PI)).ceil() as i64 + 1,
-        (params.g_max * box_inv.z / (2.0 * core::f64::consts::PI)).ceil() as i64 + 1,
-    ];
-    let two_pi = 2.0 * core::f64::consts::PI;
-    let mut g_list: Vec<(Vec3, f64)> = Vec::new();
-    for h in -nmax[0]..=nmax[0] {
-        for k in -nmax[1]..=nmax[1] {
-            for l in -nmax[2]..=nmax[2] {
-                if h == 0 && k == 0 && l == 0 {
-                    continue;
-                }
-                let gv = Vec3::new(
-                    two_pi * h as f64 / box_inv.x,
-                    two_pi * k as f64 / box_inv.y,
-                    two_pi * l as f64 / box_inv.z,
-                );
-                let g2 = gv.norm_sq();
-                if g2 <= params.g_max * params.g_max {
-                    g_list.push((gv, g2));
-                }
-            }
-        }
+    // ---- Reciprocal space.
+    let (recip_forces, recip_energy) = ewald_reciprocal(pos, charges, box_, params);
+    for (f, rf) in forces.iter_mut().zip(recip_forces.iter()) {
+        *f += *rf;
     }
-
-    // Structure factors S(g) = Σ q_j e^{i g·r_j}.
-    for &(gv, g2) in &g_list {
-        let mut s_re = 0.0;
-        let mut s_im = 0.0;
-        for (r, &q) in pos.iter().zip(charges.iter()) {
-            let phase = gv.dot(*r);
-            s_re += q * phase.cos();
-            s_im += q * phase.sin();
-        }
-        let factor = (-g2 / (4.0 * alpha2)).exp() / g2;
-        // E_recip = prefac × (2π/V) × e^{−g²/4α²}/g² × |S(g)|².
-        energy += COULOMB_PREFACTOR_KJ_ANG * factor * two_pi / box_.volume()
-            * (s_re * s_re + s_im * s_im);
-        let c = COULOMB_PREFACTOR_KJ_ANG * factor * 2.0 / box_.volume() * two_pi;
-        for ((f, r), &q) in forces.iter_mut().zip(pos.iter()).zip(charges.iter()) {
-            let phase = gv.dot(*r);
-            // −∂E/∂r_i = +prefac × factor × 2/V × 2π g × [q sin + q cos]…
-            let contrib = c * q * (s_re * phase.sin() - s_im * phase.cos());
-            *f += gv * contrib;
-        }
-    }
+    energy += recip_energy;
 
     // ---- Self term.
     energy += ewald_self_energy(charges, alpha);

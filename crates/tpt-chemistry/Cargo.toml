@@ -32,3 +32,39 @@ tpt-chem-verify = { workspace = true, optional = true }
 
 [lints]
 workspace = true
+
+[[example]]
+name = "h2_hf"
+required-features = ["core", "quantum"]
+
+[[example]]
+name = "water_hf"
+required-features = ["core", "quantum"]
+
+[[example]]
+name = "lj_argon_nve"
+required-features = ["core", "md"]
+
+[[example]]
+name = "nacl_pme"
+required-features = ["core", "md"]
+
+[[example]]
+name = "lotka_volterra_ssa"
+required-features = ["core", "kinetics"]
+
+[[example]]
+name = "michaelis_menten"
+required-features = ["core", "kinetics"]
+
+[[example]]
+name = "silicon_xrd"
+required-features = ["core", "crystal"]
+
+[[example]]
+name = "nacl_xrd"
+required-features = ["core", "crystal"]
+
+[[example]]
+name = "cif_to_xrd"
+required-features = ["core", "io", "crystal"]

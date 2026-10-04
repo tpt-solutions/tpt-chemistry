@@ -365,21 +365,32 @@ usability/automation, and adoption work. Ordered roughly by priority.*
 ### 5.2 Missing features
 
 **Quantum (`tpt-chem-quantum`)**
-- [ ] Charge and spin multiplicity inputs
+- [ ] Spin multiplicity inputs
+- [x] Charge inputs (`Molecule::set_formal_charge`; electron count = Σ Z − q,
+      with H₂²⁺ zero-electron and H₃O⁺ ten-electron tests)
 - [ ] UHF / ROHF (radicals, ions, open shells)
 - [ ] Analytic nuclear gradients
 - [ ] Geometry optimisation (uses gradients)
 - [ ] Larger basis sets (6-31G, cc-pVDZ), heavier elements
-- [ ] Orbital output (cube / molden)
+- [ ] Cube output
+- [x] Molden orbital output (`tpt-chem-quantum/src/molden.rs`; molden
+      x,y,z p-shell reordering, `[Atoms] (AU)`, occupations from the
+      formal charge)
 
 **MD (`tpt-chem-md`)**
 - [ ] Bonded forces (harmonic bonds, angles, RB dihedrals) in `System`
-- [ ] Wire Ewald/PME into `System` and the integrators
+- [x] Wire Ewald/PME into the force path: `forces::ForceModel`
+      (`AllPairs` / `LjPlusEwald` / `LjPlusPme`) drives the `ensemble`
+      run loops with one self-consistent energy/force/virial definition
 - [ ] Exclusion lists and 1-4 scaling
-- [ ] Pressure / virial computation (needed by the barostat)
-- [ ] Energy minimisation (steepest descent / L-BFGS)
+- [x] Pressure / virial: `virial_all_pairs`, `ewald_virial`, PME
+      virial, `ensemble::pressure_bar` (`(2KE/3 + W/3)/V` in bar via
+      `KJ_MOL_ANG3_TO_BAR`)
+- [x] Energy minimisation: steepest descent with backtracking line
+      search (`tpt-chem-md/src/minimiser.rs`); L-BFGS left open
 - [ ] Constraints: SHAKE / RATTLE
-- [ ] Ready-made NVT / NPT run loops
+- [x] Ready-made run loops: `ensemble::run_nve` / `run_nvt` /
+      `run_npt` (`NptSettings`), snapshot reports with mean T/E/P
 - [ ] Observables: RDF, MSD, diffusion coefficient, VACF/VDOS
 - [ ] Force-field parameter library (OPLS/AMBER/UFF subset, SPC/TIP3P water)
 - [ ] Topology builder: bond perception from geometry, atom-type assignment
@@ -426,15 +437,17 @@ usability/automation, and adoption work. Ordered roughly by priority.*
 
 ### 5.5 Adoption: examples, templates, docs
 
-- [ ] `examples/` in the umbrella crate, each runnable via
-      `cargo run --example <name>`:
-  - [ ] `h2_hf` (bond-length scan / PES)
-  - [ ] `water_hf` (orbitals and energies)
-  - [ ] `lj_argon_nve` (energy drift)
-  - [ ] `nacl_pme` (Ewald vs PME)
-  - [ ] `lotka_volterra_ssa` and `michaelis_menten` (stochastic vs deterministic)
-  - [ ] `silicon_xrd` / `nacl_xrd` (CSV pattern output)
-  - [ ] `cif_to_xrd` (end-to-end file I/O pipeline)
+- [x] `examples/` in the umbrella crate, each runnable via
+      `cargo run --example <name>` (feature-gated via `required-features`):
+  - [x] `h2_hf` (bond-length scan / PES)
+  - [x] `water_hf` (orbitals, energies, Molden file)
+  - [x] `lj_argon_nve` (NVT equilibration → NVE drift)
+  - [x] `nacl_pme` (Ewald vs PME)
+  - [x] `lotka_volterra_ssa` (logistic LV — the neutral LV system is
+        SSA-unbounded, noted in the example) and `michaelis_menten`
+        (stochastic vs deterministic)
+  - [x] `silicon_xrd` / `nacl_xrd` (CSV pattern output)
+  - [x] `cif_to_xrd` (end-to-end file I/O pipeline)
 - [ ] Starter template (`cargo generate` / GitHub template repo) that loads
       an XYZ and runs a job
 - [ ] `data/` folder of sample structures (water, benzene, argon box, NaCl,

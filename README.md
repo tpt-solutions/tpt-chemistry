@@ -14,6 +14,23 @@ typed units and numeric utilities.
 Part of the TPT science stack. Full design rationale lives in
 [`spec.txt`](spec.txt); the build progress in [`todo.md`](todo.md).
 
+## Examples
+
+Runnable end-to-end demos live in the umbrella crate
+(`cargo run -p tpt-chemistry --features <feat> --example <name>`):
+
+| Example | Features | Shows |
+|---------|----------|-------|
+| `h2_hf` | `quantum` | RHF/STO-3G bond-length scan, dissociation |
+| `water_hf` | `quantum` | SCF energies, orbital spectrum, Molden output |
+| `lj_argon_nve` | `md` | NVT equilibration → NVE production, energy drift |
+| `nacl_pme` | `md` | Direct Ewald vs Particle Mesh Ewald convergence |
+| `lotka_volterra_ssa` | `kinetics` | Gillespie SSA vs mass-action ODE |
+| `michaelis_menten` | `kinetics` | Enzyme kinetics, both regimes |
+| `silicon_xrd` | `crystal` | Diamond-structure powder pattern as CSV |
+| `nacl_xrd` | `crystal` | Rock-salt extinctions and peak families |
+| `cif_to_xrd` | `io`, `crystal` | CIF text → structure → diffraction pipeline |
+
 ## Building
 
 This workspace depends on the sibling repository
@@ -50,8 +67,8 @@ CI performs the same sibling checkout in every job (see
 | Crate | Purpose |
 |---|---|
 | [`tpt-chem-core`](crates/tpt-chem-core) | Molecular graphs, force fields, physical constants, unit-safe types |
-| [`tpt-chem-md`](crates/tpt-chem-md) | Integrators (Velocity Verlet, Leapfrog), thermostats, cell/neighbor lists, Ewald and Particle Mesh Ewald (in-house radix-2 FFT + cubic B-splines) |
-| [`tpt-chem-quantum`](crates/tpt-chem-quantum) | Gaussian basis sets, McMurchie–Davidson ERIs, SCF / Hartree–Fock |
+| [`tpt-chem-md`](crates/tpt-chem-md) | Integrators, thermostats/barostat, cell/neighbor lists, Ewald + PME (in-house FFT), virial/pressure, NVE/NVT/NPT run loops, energy minimisation |
+| [`tpt-chem-quantum`](crates/tpt-chem-quantum) | Gaussian basis sets, McMurchie–Davidson ERIs, SCF / Hartree–Fock (charged species), Molden orbital output |
 | [`tpt-chem-kinetics`](crates/tpt-chem-kinetics) | Mass-action ODEs, Gillespie SSA, Arrhenius/Eyring rates |
 | [`tpt-chem-crystal`](crates/tpt-chem-crystal) | Bravais lattices, space groups, reciprocal space, XRD simulation |
 | [`tpt-chem-io`](crates/tpt-chem-io) | XYZ, PDB, MOL2, CIF readers/writers, trajectory streaming |

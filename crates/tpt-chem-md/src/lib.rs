@@ -40,10 +40,12 @@
 pub mod box3;
 pub mod bspline;
 pub mod cell;
+pub mod ensemble;
 pub mod ewald;
 pub mod fft;
 pub mod forces;
 pub mod integrator;
+pub mod minimiser;
 pub mod neighbors;
 pub mod pme;
 pub mod system;

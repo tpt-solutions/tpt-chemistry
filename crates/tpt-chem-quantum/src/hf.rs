@@ -270,8 +270,13 @@ pub fn rhf(mol: &Molecule) -> Result<HfResult, HfError> {
     }
     let x_mat = s_half;
 
-    // Occupied orbitals (closed shell): n_elec / 2.
-    let n_elec: f64 = nuclei.iter().map(|&(z, _)| z).sum();
+    // Occupied orbitals (closed shell): n_elec / 2, with n_elec the nuclear
+    // charge minus the molecule's formal charge.
+    let charge = f64::from(mol.formal_charge());
+    let n_elec: f64 = nuclei.iter().map(|&(z, _)| z).sum::<f64>() - charge;
+    if n_elec < 0.0 || n_elec.round() != n_elec {
+        return Err(HfError::UnsupportedElement);
+    }
     let n_occ = (n_elec / 2.0).round() as usize;
     if 2.0 * n_occ as f64 != n_elec {
         return Err(HfError::UnsupportedElement); // open shell: outside RHF scope
@@ -423,6 +428,61 @@ mod tests {
 mod driver_tests {
     use super::*;
     use tpt_chem_core::molecule::Molecule;
+
+    #[test]
+    fn h2_dication_zero_electrons() {
+        // H₂²⁺ has no electrons: RHF reduces to the bare nuclear repulsion
+        // 1/R Hartree — a sharp analytic check of the charge bookkeeping.
+        let r = 0.7414;
+        let mut m = Molecule::new("H2 2+");
+        m.add_atom::<1>(Vec3::new(0.0, 0.0, -r / 2.0));
+        m.add_atom::<1>(Vec3::new(0.0, 0.0, r / 2.0));
+        m.set_formal_charge(2);
+        let res = rhf(&m).unwrap();
+        // r in Å → Bohr for the repulsion.
+        let r_bohr = r * tpt_chem_core::units::angstrom_to_bohr(1.0);
+        let want = 1.0 / r_bohr;
+        assert!(
+            (res.energy - want).abs() < 1e-10,
+            "E = {} vs {want}",
+            res.energy
+        );
+        assert_eq!(res.orbital_energies.len(), 2);
+    }
+
+    #[test]
+    fn hydronium_ten_electron_closed_shell() {
+        // H₃O⁺: 8 + 3 − 1 = 10 electrons — the same closed shell as water.
+        let r = 0.98;
+        let mut m = Molecule::new("H3O+");
+        m.add_atom::<8>(Vec3::ZERO);
+        for k in 0..3 {
+            let a = 2.0 * core::f64::consts::PI * k as f64 / 3.0;
+            m.add_atom::<1>(Vec3::new(r * a.cos(), r * a.sin(), 0.0));
+        }
+        m.set_formal_charge(1);
+        let res = rhf(&m).unwrap();
+        // Roughly water-like electronic energy; the sharp assertions are the
+        // bookkeeping ones below.
+        assert!(
+            res.energy < -74.0 && res.energy > -76.0,
+            "E = {}",
+            res.energy
+        );
+        // O: 1s + 2s + 2p(3) = 5 functions; 3 H: 1 each → 8.
+        assert_eq!(res.orbital_energies.len(), 8);
+        assert_eq!(res.n_basis, 8);
+    }
+
+    #[test]
+    fn odd_electron_charge_is_rejected() {
+        // H₂⁺: 2 − 1 = 1 electron → open shell, outside RHF scope.
+        let mut m = Molecule::new("H2+");
+        m.add_atom::<1>(Vec3::new(0.0, 0.0, -0.7));
+        m.add_atom::<1>(Vec3::new(0.0, 0.0, 0.7));
+        m.set_formal_charge(1);
+        assert_eq!(rhf_energy(&m), Err(HfError::UnsupportedElement));
+    }
 
     #[test]
     fn basis_too_large_is_a_dedicated_error() {

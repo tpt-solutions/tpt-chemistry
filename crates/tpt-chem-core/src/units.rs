@@ -94,6 +94,10 @@ pub const COULOMB_CONSTANT: f64 = 8.987_551_791_9e9;
 /// the elementary charge.
 pub const COULOMB_PREFACTOR_KJ_ANG: f64 = 1_389.354_582_655;
 
+/// Pressure conversion: 1 kJ·mol⁻¹·Å⁻³ in bar
+/// (`= 10³ J/mol / N_A / 10⁻³⁰ m³ / 10⁵ Pa/bar`).
+pub const KJ_MOL_ANG3_TO_BAR: f64 = 16_605.390_671_7;
+
 /// 1 kcal in kJ (thermochemical calorie, exact: 1 cal = 4.184 J).
 pub const KCAL_PER_KJ: f64 = 1.0 / 4.184;
 

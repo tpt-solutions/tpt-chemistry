@@ -140,6 +140,7 @@ pub struct Molecule {
     bonds: Vec<Bond>,
     adjacency: Vec<Vec<usize>>,
     counts: [u16; MAX_Z as usize],
+    total_charge: i32,
 }
 
 impl Default for Molecule {
@@ -150,6 +151,7 @@ impl Default for Molecule {
             bonds: Vec::new(),
             adjacency: Vec::new(),
             counts: [0; MAX_Z as usize],
+            total_charge: 0,
         }
     }
 }
@@ -249,6 +251,18 @@ impl Molecule {
     /// Rename the molecule.
     pub fn set_name(&mut self, name: &str) {
         self.name = name.to_string();
+    }
+
+    /// Formal total charge (e). Defaults to 0; consumed by quantum drivers
+    /// to derive the electron count `Σ Z − q`. Distinct from
+    /// [`Molecule::total_charge`], the sum of per-atom *partial* charges.
+    pub fn formal_charge(&self) -> i32 {
+        self.total_charge
+    }
+
+    /// Set the formal total charge (e).
+    pub fn set_formal_charge(&mut self, charge: i32) {
+        self.total_charge = charge;
     }
 
     /// Borrow atom `id`.
