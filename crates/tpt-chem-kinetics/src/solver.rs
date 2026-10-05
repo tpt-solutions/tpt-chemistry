@@ -217,6 +217,83 @@ pub fn ssa(net: &ReactionNetwork, y0: &[f64], t_end: f64, rng: &mut Rng) -> Vec<
     last.1
 }
 
+/// Poisson sample with Knuth's method for small means and the
+/// normal-approximation (μ ≈ σ²) for large ones.
+fn poisson(rng: &mut Rng, lambda: f64) -> f64 {
+    if lambda <= 0.0 {
+        return 0.0;
+    }
+    if lambda < 30.0 {
+        let limit = (-lambda).exp();
+        let mut k = 0.0f64;
+        let mut p = 1.0f64;
+        loop {
+            p *= rng.uniform();
+            if p <= limit {
+                return k;
+            }
+            k += 1.0;
+        }
+    }
+    // Normal approximation for large λ.
+    (lambda + lambda.sqrt() * rng.normal(0.0, 1.0))
+        .max(0.0)
+        .round()
+}
+
+/// Explicit tau-leaping: over a step `tau`, reaction `j` fires
+/// `Poisson(a_j·tau)` times simultaneously. When any population would go
+/// negative (a too-long leap), `tau` is halved and the step retried.
+///
+/// Accuracy requires `tau` small enough that propensities change little
+/// over a step; the caller picks `tau` for the network at hand. Returns
+/// the state at `t_end` (f64 copy numbers, clamped at zero like [`ssa`]).
+pub fn tau_leap(
+    net: &ReactionNetwork,
+    y0: &[f64],
+    t_end: f64,
+    tau: f64,
+    rng: &mut Rng,
+) -> Vec<f64> {
+    let mut x = y0.to_vec();
+    let mut t = 0.0f64;
+    let n_species = net.n_species();
+    let stoich = net.stoichiometry_matrix();
+    while t < t_end {
+        let step = tau.min(t_end - t);
+        let prop = net.propensities(&x);
+        // Draw leap counts; on any negative population, halve and retry.
+        let mut fires: Vec<f64> = prop.iter().map(|&a| poisson(rng, a * step)).collect();
+        loop {
+            let mut next = x.clone();
+            for (j, &nj) in fires.iter().enumerate() {
+                for i in 0..n_species {
+                    next[i] += stoich[j][i] * nj;
+                }
+            }
+            if next.iter().all(|&v| v >= 0.0) {
+                x = next;
+                break;
+            }
+            // Halve the *counts* (a fresh draw would still be too big).
+            if fires.iter().all(|&n| n < 1.0) {
+                // Cannot shrink further; clamp as ssa does.
+                for v in x.iter_mut() {
+                    if *v < 0.0 {
+                        *v = 0.0;
+                    }
+                }
+                break;
+            }
+            for n in fires.iter_mut() {
+                *n = (*n / 2.0).floor();
+            }
+        }
+        t += step;
+    }
+    x
+}
+
 /// Find a steady state by damped fixed-point iteration on the explicit
 /// Euler map `x ← x + λ·f(x)` with back-off when the residual grows.
 /// Returns `Err` with the last state if no steady state is reached within
@@ -373,5 +450,79 @@ mod tests {
         let min_prey = traj.iter().map(|s| s[0]).fold(f64::INFINITY, f64::min);
         assert!(max_prey.is_finite() && max_prey > 1.0, "oscillates");
         assert!(min_prey >= 0.0, "bounded below by 0");
+    }
+}
+
+#[cfg(test)]
+mod tau_leap_tests {
+    use super::*;
+    use crate::network::ReactionNetwork;
+    use tpt_chem_core::rng::Rng;
+
+    #[test]
+    fn tau_leap_matches_ssa_means() {
+        // Michaelis-Menten-ish network at moderate copy numbers, where the
+        // SSA mean is the reference. Tau-leap with tau = 0.05 must agree
+        // within a few percent.
+        let net = ReactionNetwork::builder()
+            .species(&["E", "S", "ES", "P"])
+            .reaction(&[("E", 1.0), ("S", 1.0)], &[("ES", 1.0)], 1.0)
+            .reaction(&[("ES", 1.0)], &[("E", 1.0), ("S", 1.0)], 0.5)
+            .reaction(&[("ES", 1.0)], &[("E", 1.0), ("P", 1.0)], 0.1)
+            .build();
+        let y0 = [40.0, 80.0, 0.0, 0.0];
+        let t_end = 30.0;
+
+        const RUNS: usize = 400;
+        let mut ssa_p = 0.0;
+        let mut leap_p = 0.0;
+        for s in 0..RUNS {
+            let mut rng = Rng::new(10_000 + s as u64);
+            ssa_p += ssa(&net, &y0, t_end, &mut rng)[3];
+            let mut rng = Rng::new(10_000 + s as u64);
+            leap_p += tau_leap(&net, &y0, t_end, 0.05, &mut rng)[3];
+        }
+        let ssa_mean = ssa_p / RUNS as f64;
+        let leap_mean = leap_p / RUNS as f64;
+        assert!(
+            (leap_mean - ssa_mean).abs() < 0.05 * ssa_mean,
+            "leap {leap_mean} vs ssa {ssa_mean}"
+        );
+    }
+
+    #[test]
+    fn tau_leap_conserves_mass_like_ssa() {
+        // A ↔ B (closed network): total copy number constant in the mean.
+        let net = ReactionNetwork::builder()
+            .species(&["A", "B"])
+            .reaction(&[("A", 1.0)], &[("B", 1.0)], 2.0)
+            .reaction(&[("B", 1.0)], &[("A", 1.0)], 1.0)
+            .build();
+        let y0 = [60.0, 20.0];
+        let mut rng = Rng::new(5);
+        let final_state = tau_leap(&net, &y0, 25.0, 0.02, &mut rng);
+        // Discrete leaps preserve the integer total exactly.
+        assert!(
+            (final_state[0] + final_state[1] - 80.0).abs() < 1e-9,
+            "{final_state:?}"
+        );
+    }
+
+    #[test]
+    fn tau_leap_negative_guard_keeps_populations_finite() {
+        // Fast reversible dimerization with a small species pool: naive
+        // leaping can drive populations negative; the halving guard must
+        // keep the state non-negative.
+        let net = ReactionNetwork::builder()
+            .species(&["A", "B"])
+            .reaction(&[("A", 1.0)], &[("B", 1.0)], 5.0)
+            .reaction(&[("B", 1.0)], &[("A", 1.0)], 0.1)
+            .build();
+        let y0 = [10.0, 0.0];
+        for seed in 0..50u64 {
+            let mut rng = Rng::new(seed);
+            let s = tau_leap(&net, &y0, 10.0, 0.1, &mut rng);
+            assert!(s.iter().all(|&v| v >= 0.0), "seed {seed}: {s:?}");
+        }
     }
 }

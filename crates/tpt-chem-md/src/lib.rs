@@ -37,6 +37,7 @@
 //! assert!((e_tot - e1).abs() / e1.abs() < 1e-2);
 //! ```
 
+pub mod bonded;
 pub mod box3;
 pub mod bspline;
 pub mod cell;
@@ -47,6 +48,7 @@ pub mod forces;
 pub mod integrator;
 pub mod minimiser;
 pub mod neighbors;
+pub mod observables;
 pub mod pme;
 pub mod system;
 pub mod thermostat;

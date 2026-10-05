@@ -378,7 +378,11 @@ usability/automation, and adoption work. Ordered roughly by priority.*
       formal charge)
 
 **MD (`tpt-chem-md`)**
-- [ ] Bonded forces (harmonic bonds, angles, RB dihedrals) in `System`
+- [x] Bonded forces: `System::bonded` topology (harmonic bonds, angles,
+      RB dihedrals over the core kernels), folded into every
+      `ForceModel::evaluate`/`virial`; finite-difference gradient test.
+      The pass also fixed a virial sign error in `ewald_virial`/`pme_virial`
+      (W = Σ r·F, not −Σ r·F)
 - [x] Wire Ewald/PME into the force path: `forces::ForceModel`
       (`AllPairs` / `LjPlusEwald` / `LjPlusPme`) drives the `ensemble`
       run loops with one self-consistent energy/force/virial definition
@@ -391,12 +395,17 @@ usability/automation, and adoption work. Ordered roughly by priority.*
 - [ ] Constraints: SHAKE / RATTLE
 - [x] Ready-made run loops: `ensemble::run_nve` / `run_nvt` /
       `run_npt` (`NptSettings`), snapshot reports with mean T/E/P
-- [ ] Observables: RDF, MSD, diffusion coefficient, VACF/VDOS
+- [x] Observables: RDF (ideal-gas normalized, lattice-shell test), MSD
+      (time-origin averaged), VACF, Einstein and Green–Kubo diffusion
+      (`tpt-chem-md/src/observables.rs`; VDOS via FFT of the VACF left as
+      a user step)
 - [ ] Force-field parameter library (OPLS/AMBER/UFF subset, SPC/TIP3P water)
 - [ ] Topology builder: bond perception from geometry, atom-type assignment
 
 **Kinetics (`tpt-chem-kinetics`)**
-- [ ] Tau-leaping and next-reaction-method SSA
+- [x] Tau-leaping (`solver::tau_leap`, Poisson counts with negative-
+      population halving guard; means validated against SSA)
+- [ ] Next-reaction-method SSA
 - [ ] Parameter fitting and sensitivity analysis
 
 **Crystal (`tpt-chem-crystal`)**
@@ -405,7 +414,9 @@ usability/automation, and adoption work. Ordered roughly by priority.*
 - [ ] Supercell and slab builders
 
 **I/O (`tpt-chem-io`)**
-- [ ] `.gro`, SDF, SMILES readers/writers
+- [x] `.gro` reader/writer (`tpt-chem-io/src/gro.rs`, nm↔Å at the API
+      boundary, round-trip + fixed-column reference tests)
+- [ ] SDF, SMILES readers/writers
 - [ ] Binary trajectories (DCD / XTC)
 
 ### 5.3 Innovation

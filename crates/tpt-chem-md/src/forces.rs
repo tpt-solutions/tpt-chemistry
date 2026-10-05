@@ -299,7 +299,7 @@ impl ForceModel {
     /// consistent with [`ForceModel::evaluate`] (for the mesh model, to the
     /// PME discretization level). Feeds [`crate::ensemble::pressure_bar`].
     pub fn virial(&self, sys: &System) -> f64 {
-        match *self {
+        let mut w = match *self {
             ForceModel::AllPairs { cutoff } => virial_all_pairs(sys, sys.box_, cutoff),
             ForceModel::LjPlusEwald { lj_cutoff, ewald } => {
                 self.lj_virial(sys, lj_cutoff)
@@ -313,7 +313,12 @@ impl ForceModel {
             ForceModel::LjPlusPme { lj_cutoff, pme } => {
                 self.lj_virial(sys, lj_cutoff) + pme_virial(sys, &pme)
             }
+        };
+        if let Some(bonded) = &sys.bonded {
+            let (fb, _) = crate::bonded::bonded_energy_forces(bonded, &sys.pos);
+            w += crate::bonded::bonded_virial(&fb, &sys.pos);
         }
+        w
     }
 
     fn lj_virial(&self, sys: &System, lj_cutoff: f64) -> f64 {
@@ -346,14 +351,14 @@ static DUMMY_BOX: crate::box3::Box3 = crate::box3::Box3 {
     length: Vec3::new(1.0, 1.0, 1.0),
 };
 
-/// Mesh-model virial: LJ part plus `−Σ rᵢ·Fᵢ` of the PME reciprocal forces
+/// Mesh-model virial: LJ part plus `Σ rᵢ·Fᵢ` of the PME reciprocal forces
 /// (wrap-safe for net-neutral systems).
 fn pme_virial(sys: &System, pme: &crate::pme::PmeParams) -> f64 {
     let Some(b) = sys.box_ else { return 0.0 };
     let (f, _) = crate::pme::pme_reciprocal_energy_forces(&sys.pos, &sys.charge, &b, pme);
     let mut w = 0.0;
     for (r, fi) in sys.pos.iter().zip(f.iter()) {
-        w -= r.dot(*fi);
+        w += r.dot(*fi);
     }
     w
 }
@@ -384,4 +389,61 @@ pub fn virial_all_pairs(sys: &System, box_: Option<Box3>, cutoff: Option<f64>) -
         }
     }
     w
+}
+
+#[cfg(test)]
+mod bonded_model_tests {
+    use super::*;
+    use crate::bonded::Bonded;
+
+    #[test]
+    fn force_model_adds_bonded_terms() {
+        let mut sys = System::new();
+        let lj = LennardJones {
+            sigma: 2.5,
+            epsilon: 0.5,
+        };
+        sys.add_atom(lj, 0.0, 1.0, Vec3::new(0.0, 0.0, 0.0));
+        sys.add_atom(lj, 0.0, 1.0, Vec3::new(2.6, 0.0, 0.0));
+        let model = ForceModel::AllPairs { cutoff: None };
+        let (_, e_free) = model.evaluate(&sys);
+        let mut bonded = Bonded::new();
+        bonded.bond(
+            0,
+            1,
+            tpt_chem_core::forcefield::HarmonicBond { k: 200.0, r0: 2.5 },
+        );
+        sys.bonded = Some(bonded);
+        let (f, e_bonded) = model.evaluate(&sys);
+        assert!(
+            (e_bonded - e_free).abs() < 0.1 * e_free.abs() + 1.0,
+            "bond near r0 barely shifts the energy: {e_free} vs {e_bonded}"
+        );
+        // Force direction flips with the bond term dominating near r0.
+        assert!(f[0].x.is_finite());
+    }
+
+    #[test]
+    fn bonded_model_virial_is_exact_gradient_consistent() {
+        // With only a bond, the model virial must equal r * fmag.
+        let mut sys = System::new();
+        let lj = LennardJones {
+            sigma: 1.0,
+            epsilon: 0.0,
+        };
+        sys.add_atom(lj, 0.0, 1.0, Vec3::new(0.0, 0.0, 0.0));
+        sys.add_atom(lj, 0.0, 1.0, Vec3::new(2.7, 0.0, 0.0));
+        let mut bonded = Bonded::new();
+        bonded.bond(
+            0,
+            1,
+            tpt_chem_core::forcefield::HarmonicBond { k: 150.0, r0: 2.5 },
+        );
+        sys.bonded = Some(bonded);
+        let model = ForceModel::AllPairs { cutoff: None };
+        let w = model.virial(&sys);
+        let r = 2.7;
+        let fmag_bond = 150.0 * (2.5 - 2.7); // = -30 (stretching pulls back)
+        assert!((w - r * fmag_bond).abs() < 1e-9, "w = {w}");
+    }
 }

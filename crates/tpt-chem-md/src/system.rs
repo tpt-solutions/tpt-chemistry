@@ -28,6 +28,9 @@ pub struct System {
     pub names: Vec<String>,
     /// Optional periodic box (Å).
     pub box_: Option<Box3>,
+    /// Optional bonded topology; when present, every force evaluation adds
+    /// the bonded energy/forces on top of the nonbonded pair terms.
+    pub bonded: Option<crate::bonded::Bonded>,
     /// Last potential energy reported by a force evaluation (kJ·mol⁻¹).
     pub potential_energy: f64,
 }

@@ -21,6 +21,7 @@
 
 pub mod cif;
 pub mod error;
+pub mod gro;
 pub mod mol2;
 pub mod pdb;
 pub mod trajectory;

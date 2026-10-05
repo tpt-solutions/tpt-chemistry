@@ -146,7 +146,7 @@ pub fn ewald_reciprocal(
 }
 
 /// Virial of the Ewald Coulomb sum (kJ·mol⁻¹): the real-space pair term
-/// `Σ r·f` plus the reciprocal term `−Σ rᵢ·Fᵢ` (the latter is
+/// plus the reciprocal term `Σ rᵢ·Fᵢ` (with `Fᵢ = −∂U/∂rᵢ`; the sum is
 /// wrapping-invariant for net-neutral systems, where Σ Fᵢ = 0).
 pub fn ewald_virial(pos: &[Vec3], charges: &[f64], box_: &Box3, params: &EwaldParams) -> f64 {
     let alpha2 = params.alpha * params.alpha;
@@ -169,10 +169,10 @@ pub fn ewald_virial(pos: &[Vec3], charges: &[f64], box_: &Box3, params: &EwaldPa
             w += r * f_mag;
         }
     }
-    // Reciprocal: −Σ rᵢ·Fᵢ.
+    // Reciprocal: Σ rᵢ·Fᵢ.
     let (recip_f, _) = ewald_reciprocal(pos, charges, box_, params);
     for (r, f) in pos.iter().zip(recip_f.iter()) {
-        w -= r.dot(*f);
+        w += r.dot(*f);
     }
     w
 }
