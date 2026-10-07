@@ -38,7 +38,7 @@ impl VelocityVerlet {
     pub fn step(&self, sys: &mut System, cutoff: Option<f64>) -> f64 {
         let dt = self.dt;
         if sys.force.iter().all(|f| *f == Vec3::ZERO) && sys.potential_energy == 0.0 {
-            let (f, e) = crate::forces::forces_all_pairs(sys, sys.box_, cutoff);
+            let (f, e) = sys.with_bonded(crate::forces::forces_all_pairs(sys, sys.box_, cutoff));
             sys.force = f;
             sys.potential_energy = e;
         }
@@ -52,7 +52,7 @@ impl VelocityVerlet {
                 *p = b.wrap(*p);
             }
         }
-        let (f, e) = crate::forces::forces_all_pairs(sys, sys.box_, cutoff);
+        let (f, e) = sys.with_bonded(crate::forces::forces_all_pairs(sys, sys.box_, cutoff));
         sys.force = f;
         sys.potential_energy = e;
         for i in 0..sys.len() {
@@ -84,7 +84,9 @@ impl VelocityVerlet {
                 *p = b.wrap(*p);
             }
         }
-        let (f, e) = crate::forces::forces_neighbor_list(sys, sys.box_, neighbors);
+        let (f, e) = sys.with_bonded(crate::forces::forces_neighbor_list(
+            sys, sys.box_, neighbors,
+        ));
         sys.force = f;
         sys.potential_energy = e;
         for i in 0..sys.len() {

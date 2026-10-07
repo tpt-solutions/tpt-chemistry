@@ -28,7 +28,52 @@ fn pair_energy_force(sys: &System, a: usize, b: usize, r: f64, r2: f64) -> (f64,
     let qq = sys.charge[a] * sys.charge[b];
     let e_c = COULOMB_PREFACTOR_KJ_ANG * qq / r;
     let f_c = COULOMB_PREFACTOR_KJ_ANG * qq / r2;
-    (e_lj + e_c, f_lj + f_c)
+    let (s_lj, s_c) = pair_scales(sys, a, b);
+    (s_lj * e_lj + s_c * e_c, s_lj * f_lj + s_c * f_c)
+}
+
+/// `(LJ, Coulomb)` scale factors for a pair (1, 1 unless excluded/scaled).
+#[inline]
+fn pair_scales(sys: &System, a: usize, b: usize) -> (f64, f64) {
+    match sys.exclusions.as_ref().and_then(|x| x.get(a, b)) {
+        Some(p) => (p.lj, p.coulomb),
+        None => (1.0, 1.0),
+    }
+}
+
+/// Correction for Ewald/PME models, whose reciprocal sum includes every
+/// pair at full strength: subtract `(1 - s)*qq/r` for each scaled or
+/// excluded pair. Returns `(forces, energy, virial)`.
+fn coulomb_exclusion_correction(sys: &System) -> (Vec<Vec3>, f64, f64) {
+    let mut forces = vec![Vec3::ZERO; sys.len()];
+    let (mut energy, mut w) = (0.0, 0.0);
+    let Some(ex) = sys.exclusions.as_ref() else {
+        return (forces, energy, w);
+    };
+    for (a, b, scale) in ex.iter() {
+        let missing = 1.0 - scale.coulomb;
+        if missing == 0.0 {
+            continue;
+        }
+        let raw = sys.pos[b] - sys.pos[a];
+        let d = match sys.box_ {
+            Some(bx) => bx.min_image(raw),
+            None => raw,
+        };
+        let r2 = d.norm_sq();
+        if r2 < 1e-12 {
+            continue;
+        }
+        let r = r2.sqrt();
+        let qq = COULOMB_PREFACTOR_KJ_ANG * sys.charge[a] * sys.charge[b];
+        energy -= missing * qq / r;
+        let fmag = -missing * qq / r2;
+        let fvec = d * (fmag / r);
+        forces[a] -= fvec;
+        forces[b] += fvec;
+        w += r * fmag;
+    }
+    (forces, energy, w)
 }
 
 /// Energy and forces for a full O(N²) all-pairs evaluation.
@@ -241,8 +286,14 @@ pub enum ForceModel {
 }
 
 impl ForceModel {
-    /// Evaluate energy and forces for `sys`.
+    /// Evaluate energy and forces for `sys`: the nonbonded model plus the
+    /// bonded topology (`System::bonded`) when present.
     pub fn evaluate(&self, sys: &System) -> (Vec<Vec3>, f64) {
+        sys.with_bonded(self.evaluate_nonbonded(sys))
+    }
+
+    /// Nonbonded part only (pair LJ/Coulomb or LJ + Ewald/PME).
+    pub fn evaluate_nonbonded(&self, sys: &System) -> (Vec<Vec3>, f64) {
         match *self {
             ForceModel::AllPairs { cutoff } => forces_all_pairs(sys, sys.box_, cutoff),
             ForceModel::LjPlusEwald { lj_cutoff, ewald } => {
@@ -251,7 +302,18 @@ impl ForceModel {
                 })
             }
             ForceModel::LjPlusPme { lj_cutoff, pme } => self.lj_longrange(sys, lj_cutoff, |b| {
-                crate::pme::pme_reciprocal_energy_forces(&sys.pos, &sys.charge, b, &pme)
+                let (mut f, mut e) =
+                    crate::pme::pme_reciprocal_energy_forces(&sys.pos, &sys.charge, b, &pme);
+                // Mesh = smooth reciprocal part only; add the erfc real-space
+                // pairs (cut at the LJ cutoff, capped at half the box) and
+                // the self term.
+                let real = pme_real_params(&pme, lj_cutoff, b);
+                let (fr, er) = crate::ewald::ewald_real_space(&sys.pos, &sys.charge, b, &real);
+                for (fi, fri) in f.iter_mut().zip(fr.iter()) {
+                    *fi += *fri;
+                }
+                e += er + crate::ewald::ewald_self_energy(&sys.charge, pme.alpha);
+                (f, e)
             }),
         }
     }
@@ -278,9 +340,10 @@ impl ForceModel {
                     }
                     let r = r2.sqrt();
                     let lj = pair_lj(&sys.lj[a], &sys.lj[c]);
+                    let s_lj = pair_scales(sys, a, c).0;
                     let sr6 = (lj.sigma * lj.sigma / r2).powi(3);
-                    energy += 4.0 * lj.epsilon * (sr6 * sr6 - sr6);
-                    let fmag = 24.0 * lj.epsilon / r * (2.0 * sr6 * sr6 - sr6);
+                    energy += s_lj * 4.0 * lj.epsilon * (sr6 * sr6 - sr6);
+                    let fmag = s_lj * 24.0 * lj.epsilon / r * (2.0 * sr6 * sr6 - sr6);
                     let fvec = d * (fmag / r);
                     forces[a] -= fvec;
                     forces[c] += fvec;
@@ -291,6 +354,11 @@ impl ForceModel {
                 *f += *flr;
             }
             energy += e_lr;
+            let (f_ex, e_ex, _) = coulomb_exclusion_correction(sys);
+            for (f, fe) in forces.iter_mut().zip(f_ex.iter()) {
+                *f += *fe;
+            }
+            energy += e_ex;
         }
         (forces, energy)
     }
@@ -311,7 +379,7 @@ impl ForceModel {
                     )
             }
             ForceModel::LjPlusPme { lj_cutoff, pme } => {
-                self.lj_virial(sys, lj_cutoff) + pme_virial(sys, &pme)
+                self.lj_virial(sys, lj_cutoff) + pme_virial(sys, &pme, lj_cutoff)
             }
         };
         if let Some(bonded) = &sys.bonded {
@@ -335,11 +403,13 @@ impl ForceModel {
                     }
                     let r = r2.sqrt();
                     let lj = pair_lj(&sys.lj[a], &sys.lj[c]);
+                    let s_lj = pair_scales(sys, a, c).0;
                     let sr6 = (lj.sigma * lj.sigma / r2).powi(3);
-                    let fmag = 24.0 * lj.epsilon / r * (2.0 * sr6 * sr6 - sr6);
+                    let fmag = s_lj * 24.0 * lj.epsilon / r * (2.0 * sr6 * sr6 - sr6);
                     w += r * fmag;
                 }
             }
+            w += coulomb_exclusion_correction(sys).2;
         }
         w
     }
@@ -351,16 +421,36 @@ static DUMMY_BOX: crate::box3::Box3 = crate::box3::Box3 {
     length: Vec3::new(1.0, 1.0, 1.0),
 };
 
-/// Mesh-model virial: LJ part plus `Σ rᵢ·Fᵢ` of the PME reciprocal forces
-/// (wrap-safe for net-neutral systems).
-fn pme_virial(sys: &System, pme: &crate::pme::PmeParams) -> f64 {
+/// Real-space Ewald parameters matching a PME model: same splitting alpha,
+/// cutoff `min(lj_cutoff, L/2)`.
+fn pme_real_params(
+    pme: &crate::pme::PmeParams,
+    lj_cutoff: f64,
+    b: &crate::box3::Box3,
+) -> crate::ewald::EwaldParams {
+    let half = 0.5 * b.length.x.min(b.length.y).min(b.length.z);
+    crate::ewald::EwaldParams {
+        alpha: pme.alpha,
+        r_cutoff: lj_cutoff.min(half),
+        g_max: 0.0,
+    }
+}
+
+/// Mesh-model Coulomb virial: `Σ rᵢ·Fᵢ` of the PME reciprocal forces
+/// (wrap-safe for net-neutral systems) plus the real-space pair virial.
+fn pme_virial(sys: &System, pme: &crate::pme::PmeParams, lj_cutoff: f64) -> f64 {
     let Some(b) = sys.box_ else { return 0.0 };
     let (f, _) = crate::pme::pme_reciprocal_energy_forces(&sys.pos, &sys.charge, &b, pme);
     let mut w = 0.0;
     for (r, fi) in sys.pos.iter().zip(f.iter()) {
         w += r.dot(*fi);
     }
-    w
+    w + crate::ewald::ewald_real_virial(
+        &sys.pos,
+        &sys.charge,
+        &b,
+        &pme_real_params(pme, lj_cutoff, &b),
+    )
 }
 
 /// Virial of the truncated LJ + direct Coulomb pair sum,
@@ -385,7 +475,8 @@ pub fn virial_all_pairs(sys: &System, box_: Option<Box3>, cutoff: Option<f64>) -
             let sr6 = (lj.sigma * lj.sigma / r2).powi(3);
             let f_lj = 24.0 * lj.epsilon / r * (2.0 * sr6 * sr6 - sr6);
             let f_c = COULOMB_PREFACTOR_KJ_ANG * sys.charge[a] * sys.charge[b] / r2;
-            w += r * (f_lj + f_c);
+            let (s_lj, s_c) = pair_scales(sys, a, b);
+            w += r * (s_lj * f_lj + s_c * f_c);
         }
     }
     w
@@ -445,5 +536,212 @@ mod bonded_model_tests {
         let r = 2.7;
         let fmag_bond = 150.0 * (2.5 - 2.7); // = -30 (stretching pulls back)
         assert!((w - r * fmag_bond).abs() < 1e-9, "w = {w}");
+    }
+}
+
+/// A [`System`] plus [`ForceModel`] viewed as a generic
+/// [`tpt_chem_core::potential::Potential`] (positions in, energy/forces
+/// out), so MD force fields can share the generic minimiser and any other
+/// tool written against the trait.
+#[derive(Clone, Debug)]
+pub struct ModelPotential {
+    /// The system (its `pos` is overwritten on every call).
+    pub system: System,
+    /// Force model used for evaluation.
+    pub model: ForceModel,
+}
+
+impl tpt_chem_core::potential::Potential for ModelPotential {
+    type Error = core::convert::Infallible;
+
+    fn n_atoms(&self) -> usize {
+        self.system.len()
+    }
+
+    fn energy_forces(
+        &mut self,
+        positions: &[Vec3],
+    ) -> Result<(f64, Vec<Vec3>), core::convert::Infallible> {
+        self.system.pos.clear();
+        self.system.pos.extend_from_slice(positions);
+        let (f, e) = self.model.evaluate(&self.system);
+        // The model returns (forces, energy) per `ForceModel::evaluate`.
+        Ok((e, f))
+    }
+}
+
+#[cfg(test)]
+mod potential_tests {
+    use super::*;
+    use tpt_chem_core::forcefield::LennardJones;
+    use tpt_chem_core::potential::{minimize_bfgs, MinimizeSettings};
+
+    #[test]
+    fn lj_dimer_relaxes_to_potential_minimum() {
+        let lj = LennardJones {
+            sigma: 3.4,
+            epsilon: 0.997,
+        };
+        let mut sys = System::new();
+        sys.add_atom(lj, 0.0, 39.95, Vec3::new(0.0, 0.0, 0.0));
+        sys.add_atom(lj, 0.0, 39.95, Vec3::new(0.0, 0.0, 4.5));
+        let mut pot = ModelPotential {
+            system: sys,
+            model: ForceModel::AllPairs { cutoff: None },
+        };
+        let mut pos = [Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 4.5)];
+        let rep = minimize_bfgs(
+            &mut pot,
+            &mut pos,
+            MinimizeSettings {
+                force_tol: 1e-4,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert!(rep.converged, "{rep:?}");
+        let r = (pos[1] - pos[0]).norm();
+        assert!((r - 3.4 * 2f64.powf(1.0 / 6.0)).abs() < 1e-3, "{r}");
+        assert!((rep.energy + 0.997).abs() < 1e-4);
+    }
+}
+
+#[cfg(test)]
+mod exclusion_tests {
+    use super::*;
+    use crate::exclusions::{Exclusions, PairScale};
+    use tpt_chem_core::forcefield::LennardJones;
+
+    fn pair(r: f64, q: f64) -> System {
+        let mut sys = System::new();
+        let lj = LennardJones {
+            sigma: 3.0,
+            epsilon: 0.5,
+        };
+        sys.add_atom(lj, q, 12.0, Vec3::new(0.0, 0.0, 0.0));
+        sys.add_atom(lj, -q, 12.0, Vec3::new(r, 0.0, 0.0));
+        sys
+    }
+
+    #[test]
+    fn excluded_pair_has_no_interaction() {
+        let mut sys = pair(2.0, 0.4);
+        let mut ex = Exclusions::new();
+        ex.set(
+            0,
+            1,
+            PairScale {
+                lj: 0.0,
+                coulomb: 0.0,
+            },
+        );
+        sys.exclusions = Some(ex);
+        let (f, e) = forces_all_pairs(&sys, None, None);
+        assert_eq!(e, 0.0);
+        assert!(f.iter().all(|v| v.norm() == 0.0));
+        assert_eq!(virial_all_pairs(&sys, None, None), 0.0);
+    }
+
+    #[test]
+    fn one_four_scaling_is_linear_in_the_fudge() {
+        let full = forces_all_pairs(&pair(3.2, 0.4), None, None).1;
+        let mut sys = pair(3.2, 0.4);
+        let mut ex = Exclusions::new();
+        ex.set(
+            0,
+            1,
+            PairScale {
+                lj: 0.5,
+                coulomb: 0.5,
+            },
+        );
+        sys.exclusions = Some(ex);
+        let (_, e) = forces_all_pairs(&sys, None, None);
+        assert!((e - 0.5 * full).abs() < 1e-12);
+    }
+
+    #[test]
+    fn ewald_with_exclusion_matches_finite_difference() {
+        use crate::ewald::EwaldParams;
+        let mut sys = pair(1.5, 0.5);
+        let lj = sys.lj[0];
+        sys.add_atom(lj, 0.3, 12.0, Vec3::new(5.0, 4.0, 3.0));
+        sys.add_atom(lj, -0.3, 12.0, Vec3::new(3.0, 6.0, 7.0));
+        sys.set_box(Box3::cubic(12.0));
+        let mut ex = Exclusions::new();
+        ex.set(
+            0,
+            1,
+            PairScale {
+                lj: 0.0,
+                coulomb: 0.0,
+            },
+        );
+        sys.exclusions = Some(ex);
+        let model = ForceModel::LjPlusEwald {
+            lj_cutoff: 5.5,
+            ewald: EwaldParams {
+                alpha: 0.4,
+                r_cutoff: 5.9,
+                g_max: 3.5,
+            },
+        };
+        let (f, _) = model.evaluate(&sys);
+        let h = 1e-5;
+        for (atom, ax) in [(0usize, 0usize), (1, 0), (2, 1)] {
+            let e = |s: f64| {
+                let mut m = sys.clone();
+                let mut p = m.pos[atom];
+                p.set(ax, p.get(ax) + s);
+                m.pos[atom] = p;
+                model.evaluate(&m).1
+            };
+            let fd = -(e(h) - e(-h)) / (2.0 * h);
+            assert!(
+                (f[atom].get(ax) - fd).abs() < 1e-4,
+                "{atom} {ax}: {} vs {fd}",
+                f[atom].get(ax)
+            );
+        }
+    }
+
+    /// Regression: the PME model once returned only the mesh part (no
+    /// real-space erfc pairs, no self term), so its Coulomb energy was
+    /// wrong. It must now agree with the direct Ewald sum.
+    #[test]
+    fn pme_model_agrees_with_ewald_model() {
+        use crate::ewald::EwaldParams;
+        use crate::pme::PmeParams;
+        let mut sys = pair(3.5, 0.5);
+        let lj = LennardJones {
+            sigma: 3.0,
+            epsilon: 0.0,
+        };
+        sys.lj = vec![lj; 2];
+        sys.add_atom(lj, 0.3, 12.0, Vec3::new(5.0, 4.0, 3.0));
+        sys.add_atom(lj, -0.3, 12.0, Vec3::new(3.0, 6.0, 7.0));
+        sys.set_box(Box3::cubic(12.0));
+        let ewald = ForceModel::LjPlusEwald {
+            lj_cutoff: 5.9,
+            ewald: EwaldParams {
+                alpha: 0.4,
+                r_cutoff: 5.9,
+                g_max: 4.5,
+            },
+        };
+        let pme = ForceModel::LjPlusPme {
+            lj_cutoff: 5.9,
+            pme: PmeParams {
+                alpha: 0.4,
+                dims: [32, 32, 32],
+                g_max: 0.0,
+            },
+        };
+        let (fe, ee) = ewald.evaluate(&sys);
+        let (fp, ep) = pme.evaluate(&sys);
+        assert!((ee - ep).abs() < 0.02 * ee.abs().max(1.0), "{ee} vs {ep}");
+        for (a, b) in fe.iter().zip(&fp) {
+            assert!((*a - *b).norm() < 0.5, "{a:?} vs {b:?}");
+        }
     }
 }

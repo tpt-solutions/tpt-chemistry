@@ -217,6 +217,101 @@ pub fn ssa(net: &ReactionNetwork, y0: &[f64], t_end: f64, rng: &mut Rng) -> Vec<
     last.1
 }
 
+/// Gibson–Bruck next-reaction method: statistically identical to
+/// [`ssa_events`] but uses one random number per event and a dependency
+/// graph, so only propensities affected by the fired reaction are
+/// recomputed. Putative firing times of affected reactions are rescaled
+/// (`t + (a_old / a_new)(τ_old − t)`) rather than redrawn.
+pub fn next_reaction_events(
+    net: &ReactionNetwork,
+    y0: &[f64],
+    t_end: f64,
+    rng: &mut Rng,
+) -> Vec<(f64, Vec<f64>)> {
+    let nr = net.n_reactions();
+    let mut x: Vec<f64> = y0.to_vec();
+    let mut events = vec![(0.0, x.clone())];
+    // depends[r] = reactions whose propensity changes when r fires.
+    let depends: Vec<Vec<usize>> = (0..nr)
+        .map(|r| {
+            let changed: Vec<usize> = net.reactions[r]
+                .stoichiometry
+                .iter()
+                .enumerate()
+                .filter(|(_, &nu)| nu != 0.0)
+                .map(|(i, _)| i)
+                .collect();
+            (0..nr)
+                .filter(|&j| {
+                    j == r
+                        || net.reactions[j]
+                            .reactants
+                            .iter()
+                            .any(|(sp, _)| changed.contains(sp))
+                })
+                .collect()
+        })
+        .collect();
+    let mut a = net.propensities(&x);
+    let mut tau: Vec<f64> = a
+        .iter()
+        .map(|&ar| {
+            if ar > 0.0 {
+                -rng.uniform().ln() / ar
+            } else {
+                f64::INFINITY
+            }
+        })
+        .collect();
+    let mut t = 0.0f64;
+    loop {
+        let (mu, t_next) =
+            tau.iter()
+                .copied()
+                .enumerate()
+                .fold(
+                    (0, f64::INFINITY),
+                    |best, (i, v)| if v < best.1 { (i, v) } else { best },
+                );
+        if !t_next.is_finite() || t_next > t_end {
+            events.push((t, x.clone()));
+            return events;
+        }
+        t = t_next;
+        for (i, &nu) in net.reactions[mu].stoichiometry.iter().enumerate() {
+            x[i] = (x[i] + nu).max(0.0);
+        }
+        for &j in &depends[mu] {
+            let a_new = net.reactions[j].propensity(&x);
+            if j == mu {
+                tau[j] = if a_new > 0.0 {
+                    t - rng.uniform().ln() / a_new
+                } else {
+                    f64::INFINITY
+                };
+            } else if a_new > 0.0 {
+                tau[j] = if a[j] > 0.0 && tau[j].is_finite() {
+                    t + (a[j] / a_new) * (tau[j] - t)
+                } else {
+                    t - rng.uniform().ln() / a_new
+                };
+            } else {
+                tau[j] = f64::INFINITY;
+            }
+            a[j] = a_new;
+        }
+        events.push((t, x.clone()));
+    }
+}
+
+/// [`next_reaction_events`] returning only the state at `t_end`.
+pub fn next_reaction(net: &ReactionNetwork, y0: &[f64], t_end: f64, rng: &mut Rng) -> Vec<f64> {
+    next_reaction_events(net, y0, t_end, rng)
+        .pop()
+        .expect("next_reaction: at least the initial state")
+        .1
+}
+
 /// Poisson sample with Knuth's method for small means and the
 /// normal-approximation (μ ≈ σ²) for large ones.
 fn poisson(rng: &mut Rng, lambda: f64) -> f64 {
@@ -523,6 +618,43 @@ mod tau_leap_tests {
             let mut rng = Rng::new(seed);
             let s = tau_leap(&net, &y0, 10.0, 0.1, &mut rng);
             assert!(s.iter().all(|&v| v >= 0.0), "seed {seed}: {s:?}");
+        }
+    }
+}
+
+#[cfg(test)]
+mod nrm_tests {
+    use super::*;
+    use tpt_chem_core::rng::Rng;
+
+    #[test]
+    fn next_reaction_matches_decay_mean() {
+        // A -> B, k = 1: E[A(t=1)] = N e^-1.
+        let net = ReactionNetwork::builder()
+            .species(&["A", "B"])
+            .reaction(&[("A", 1.0)], &[("B", 1.0)], 1.0)
+            .build();
+        let n = 400;
+        let mut sum = 0.0;
+        for s in 0..n {
+            let mut rng = Rng::new(900 + s as u64);
+            sum += next_reaction(&net, &[200.0, 0.0], 1.0, &mut rng)[0];
+        }
+        let mean = sum / n as f64;
+        let expect = 200.0 * (-1.0f64).exp();
+        assert!((mean - expect).abs() < 2.0, "mean {mean} vs {expect}");
+    }
+
+    #[test]
+    fn next_reaction_conserves_and_terminates() {
+        let net = ReactionNetwork::builder()
+            .species(&["A", "B"])
+            .reaction(&[("A", 1.0)], &[("B", 1.0)], 2.0)
+            .reaction(&[("B", 1.0)], &[("A", 1.0)], 1.0)
+            .build();
+        let mut rng = Rng::new(3);
+        for (_, st) in next_reaction_events(&net, &[50.0, 0.0], 5.0, &mut rng) {
+            assert_eq!(st[0] + st[1], 50.0);
         }
     }
 }

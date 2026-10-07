@@ -121,6 +121,59 @@ pub fn sto3g_basis(atoms: &[(u8, Vec3)]) -> Result<Vec<Shell>, BasisError> {
     Ok(out)
 }
 
+/// 6-31G shells for element `z` (H–Ne) at `center` (Bohr).
+///
+/// # Errors
+/// [`BasisError::UnsupportedElement`] for Z > 10.
+pub fn pople_631g_shells(z: u8, center: Vec3) -> Result<Vec<Shell>, BasisError> {
+    if z == 0 || z > 10 {
+        return Err(BasisError::UnsupportedElement(z));
+    }
+    Ok(crate::basis_631g::POPLE_631G[(z - 1) as usize]
+        .iter()
+        .map(|&(l, prims)| {
+            let mut sh = Shell::new(l, center, prims.to_vec());
+            sh.normalize();
+            sh
+        })
+        .collect())
+}
+
+/// Available Gaussian basis sets.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BasisSet {
+    /// Minimal STO-3G (H–Ne).
+    #[default]
+    Sto3g,
+    /// Split-valence 6-31G (H–Ne); Cartesian s and p functions only.
+    Pople631g,
+}
+
+impl BasisSet {
+    /// Shells of one element at `center` (Bohr).
+    ///
+    /// # Errors
+    /// [`BasisError::UnsupportedElement`] outside H–Ne.
+    pub fn shells(self, z: u8, center: Vec3) -> Result<Vec<Shell>, BasisError> {
+        match self {
+            BasisSet::Sto3g => sto3g_shells(z, center),
+            BasisSet::Pople631g => pople_631g_shells(z, center),
+        }
+    }
+
+    /// Shells for a whole geometry (`(Z, position in Bohr)`), atom by atom.
+    ///
+    /// # Errors
+    /// See [`BasisSet::shells`].
+    pub fn build(self, atoms: &[(u8, Vec3)]) -> Result<Vec<Shell>, BasisError> {
+        let mut out = Vec::new();
+        for &(z, r) in atoms {
+            out.extend(self.shells(z, r)?);
+        }
+        Ok(out)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

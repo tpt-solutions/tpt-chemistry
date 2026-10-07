@@ -41,8 +41,10 @@ pub mod bonded;
 pub mod box3;
 pub mod bspline;
 pub mod cell;
+pub mod constraints;
 pub mod ensemble;
 pub mod ewald;
+pub mod exclusions;
 pub mod fft;
 pub mod forces;
 pub mod integrator;
@@ -52,6 +54,8 @@ pub mod observables;
 pub mod pme;
 pub mod system;
 pub mod thermostat;
+pub mod topology;
+pub mod water;
 
 pub use thermostat::{
     berendsen_barostat, berendsen_thermostat, langevin_step, nose_hoover_step, Leapfrog,

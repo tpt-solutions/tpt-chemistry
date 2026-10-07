@@ -77,8 +77,9 @@ pub fn ewald_real_space(
                 * (erfc_br / r2
                     + 2.0 * alpha / core::f64::consts::PI.sqrt() * (-alpha2 * r2).exp() / r);
             let fvec = d * (f_mag / r);
-            forces[i] += fvec;
-            forces[j] -= fvec;
+            // f_mag > 0 is repulsive: it pushes i away from j (d points i -> j).
+            forces[i] -= fvec;
+            forces[j] += fvec;
         }
     }
     (forces, energy)
@@ -149,9 +150,19 @@ pub fn ewald_reciprocal(
 /// plus the reciprocal term `Σ rᵢ·Fᵢ` (with `Fᵢ = −∂U/∂rᵢ`; the sum is
 /// wrapping-invariant for net-neutral systems, where Σ Fᵢ = 0).
 pub fn ewald_virial(pos: &[Vec3], charges: &[f64], box_: &Box3, params: &EwaldParams) -> f64 {
+    let mut w = ewald_real_virial(pos, charges, box_, params);
+    // Reciprocal: sum of r_i . F_i.
+    let (recip_f, _) = ewald_reciprocal(pos, charges, box_, params);
+    for (r, f) in pos.iter().zip(recip_f.iter()) {
+        w += r.dot(*f);
+    }
+    w
+}
+
+/// Real-space (erfc-screened pair) part of the Ewald virial, `sum r*f`.
+pub fn ewald_real_virial(pos: &[Vec3], charges: &[f64], box_: &Box3, params: &EwaldParams) -> f64 {
     let alpha2 = params.alpha * params.alpha;
     let mut w = 0.0;
-    // Real-space: erfc-screened pairs.
     for i in 0..pos.len() {
         for j in (i + 1)..pos.len() {
             let d = box_.min_image(pos[j] - pos[i]);
@@ -168,11 +179,6 @@ pub fn ewald_virial(pos: &[Vec3], charges: &[f64], box_: &Box3, params: &EwaldPa
                     + 2.0 * params.alpha / core::f64::consts::PI.sqrt() * (-alpha2 * r2).exp() / r);
             w += r * f_mag;
         }
-    }
-    // Reciprocal: Σ rᵢ·Fᵢ.
-    let (recip_f, _) = ewald_reciprocal(pos, charges, box_, params);
-    for (r, f) in pos.iter().zip(recip_f.iter()) {
-        w += r.dot(*f);
     }
     w
 }
@@ -270,5 +276,47 @@ mod tests {
         };
         let (_, e) = ewald_energy_forces(&pos, &q, &box_, &params);
         assert!(e < 0.0, "attraction must give negative energy: {e}");
+    }
+}
+
+#[cfg(test)]
+mod fd_tests {
+    use super::*;
+
+    /// Regression: the real-space force once had the wrong sign, invisible
+    /// to symmetric-lattice tests where all forces vanish.
+    #[test]
+    fn forces_match_energy_finite_difference() {
+        let box_ = Box3::cubic(12.0);
+        let pos0 = vec![
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(3.5, 0.0, 0.0),
+            Vec3::new(5.0, 4.0, 3.0),
+            Vec3::new(3.0, 6.0, 7.0),
+        ];
+        let q = [0.5, -0.5, 0.3, -0.3];
+        let p = EwaldParams {
+            alpha: 0.4,
+            r_cutoff: 5.9,
+            g_max: 4.5,
+        };
+        let (f, _) = ewald_energy_forces(&pos0, &q, &box_, &p);
+        let h = 1e-5;
+        for atom in 0..4 {
+            for ax in 0..3 {
+                let e = |s: f64| {
+                    let mut x = pos0.clone();
+                    let v = x[atom].get(ax) + s;
+                    x[atom].set(ax, v);
+                    ewald_energy_forces(&x, &q, &box_, &p).1
+                };
+                let fd = -(e(h) - e(-h)) / (2.0 * h);
+                assert!(
+                    (f[atom].get(ax) - fd).abs() < 1e-4,
+                    "atom {atom} axis {ax}: {} vs {fd}",
+                    f[atom].get(ax)
+                );
+            }
+        }
     }
 }

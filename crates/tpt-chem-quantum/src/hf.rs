@@ -11,7 +11,7 @@ use tpt_chem_core::num;
 use tpt_chem_core::units::angstrom_to_bohr;
 use tpt_chem_core::vec3::Vec3;
 
-use crate::basis::sto3g_basis;
+use crate::basis::BasisSet;
 use crate::gaussian::cartesian_components;
 use crate::integrals::{eri_shell, kinetic_shell, nuclear_repulsion, nuclear_shell, overlap_shell};
 use crate::linalg::{jacobi_eigh, mat_mul, transpose};
@@ -93,13 +93,13 @@ const MAX_BASIS: usize = 256;
 const SCHWARZ_THRESHOLD: f64 = 1e-9;
 
 /// One Schwarz-screened shell quartet's packed component tensor.
-struct PackedQuartet {
+pub(crate) struct PackedQuartet {
     /// Shell indices `[a, b, c, d]`.
-    shells: [usize; 4],
+    pub(crate) shells: [usize; 4],
     /// Cartesian components per shell `[na, nb, nc, nd]`.
-    dims: [usize; 4],
+    pub(crate) dims: [usize; 4],
     /// Component tensor, row-major `[ia][ib][ic][id]`.
-    v: Vec<f64>,
+    pub(crate) v: Vec<f64>,
 }
 
 /// `G = Σ_{λσ} D_{λσ}[(μν|λσ) − ½(μλ|νσ)]`, accumulated directly from the
@@ -147,12 +147,20 @@ pub fn rhf_energy(mol: &Molecule) -> Result<f64, HfError> {
     rhf(mol).map(|r| r.energy)
 }
 
-/// Full HF driver: like [`rhf_energy`] but returns all converged
-/// quantities.
-///
-/// # Errors
-/// See [`rhf_energy`].
-pub fn rhf(mol: &Molecule) -> Result<HfResult, HfError> {
+/// Integrals and derived matrices shared by the RHF and UHF drivers.
+pub(crate) struct ScfSetup {
+    pub nb: usize,
+    pub offsets: Vec<usize>,
+    pub s: Vec<f64>,
+    pub h_core: Vec<f64>,
+    pub quartets: Vec<PackedQuartet>,
+    pub x_mat: Vec<f64>,
+    pub e_nuc: f64,
+    /// Electron count (nuclear charge minus formal charge).
+    pub n_elec: usize,
+}
+
+pub(crate) fn scf_setup(mol: &Molecule, basis: BasisSet) -> Result<ScfSetup, HfError> {
     // Nuclei in Bohr.
     let atoms: Vec<(u8, Vec3)> = mol
         .atoms()
@@ -162,7 +170,9 @@ pub fn rhf(mol: &Molecule) -> Result<HfResult, HfError> {
         return Err(HfError::UnsupportedElement);
     }
     let nuclei: Vec<(f64, Vec3)> = atoms.iter().map(|&(z, r)| (f64::from(z), r)).collect();
-    let shells = sto3g_basis(&atoms).map_err(|_| HfError::UnsupportedElement)?;
+    let shells = basis
+        .build(&atoms)
+        .map_err(|_| HfError::UnsupportedElement)?;
 
     // Basis-function offsets per shell.
     let mut offsets = Vec::new();
@@ -269,23 +279,57 @@ pub fn rhf(mol: &Molecule) -> Result<HfResult, HfError> {
         }
     }
     let x_mat = s_half;
-
-    // Occupied orbitals (closed shell): n_elec / 2, with n_elec the nuclear
-    // charge minus the molecule's formal charge.
     let charge = f64::from(mol.formal_charge());
     let n_elec: f64 = nuclei.iter().map(|&(z, _)| z).sum::<f64>() - charge;
     if n_elec < 0.0 || n_elec.round() != n_elec {
         return Err(HfError::UnsupportedElement);
     }
-    let n_occ = (n_elec / 2.0).round() as usize;
-    if 2.0 * n_occ as f64 != n_elec {
-        return Err(HfError::UnsupportedElement); // open shell: outside RHF scope
+    let e_nuc = nuclear_repulsion(&nuclei);
+    Ok(ScfSetup {
+        nb,
+        offsets,
+        s,
+        h_core,
+        quartets,
+        x_mat,
+        e_nuc,
+        n_elec: n_elec as usize,
+    })
+}
+
+/// Full HF driver: like [`rhf_energy`] but returns all converged
+/// quantities.
+///
+/// # Errors
+/// See [`rhf_energy`].
+pub fn rhf(mol: &Molecule) -> Result<HfResult, HfError> {
+    rhf_with_basis(mol, BasisSet::Sto3g)
+}
+
+/// [`rhf`] with an explicit basis set.
+///
+/// # Errors
+/// See [`rhf_energy`].
+pub fn rhf_with_basis(mol: &Molecule, basis: BasisSet) -> Result<HfResult, HfError> {
+    let ScfSetup {
+        nb,
+        offsets,
+        s: _,
+        h_core,
+        quartets,
+        x_mat,
+        e_nuc,
+        n_elec,
+    } = scf_setup(mol, basis)?;
+    // Closed shell only: open shells go through `uhf`.
+    if n_elec % 2 != 0 {
+        return Err(HfError::UnsupportedElement);
     }
+    let n_occ = n_elec / 2;
 
     // SCF loop.
     let mut density = vec![0.0f64; nb * nb];
     let mut energy_old = 0.0;
-    let e_nuc = nuclear_repulsion(&nuclei);
     let mut converged = false;
     for iteration in 0..128 {
         // Fock = H + G(D), accumulated from the packed quartets: every basis
@@ -493,5 +537,48 @@ mod driver_tests {
             big.add_atom::<1>(Vec3::new(i as f64 * 3.0, 0.0, 0.0));
         }
         assert_eq!(rhf_energy(&big), Err(HfError::BasisTooLarge));
+    }
+}
+
+#[cfg(test)]
+mod basis_631g_tests {
+    use super::*;
+
+    #[test]
+    fn hydrogen_631g_shell_structure_and_normalization() {
+        let o = crate::basis::pople_631g_shells(8, Vec3::ZERO).unwrap();
+        // 1s, 2s inner, 2p inner, 2s outer, 2p outer.
+        assert_eq!(o.len(), 5);
+        let nb: usize = o.iter().map(|s| crate::gaussian::n_cartesian(s.l)).sum();
+        assert_eq!(nb, 9);
+        for sh in &o {
+            let s = crate::integrals::overlap_shell(sh, sh);
+            for (i, row) in s.iter().enumerate() {
+                assert!((row[i] - 1.0).abs() < 1e-9);
+            }
+        }
+    }
+
+    #[test]
+    fn h2_631g_energy() {
+        let mut m = Molecule::new("H2");
+        let r = 1.4 * tpt_chem_core::units::BOHR_ANGSTROM;
+        m.add_atom::<1>(Vec3::new(0.0, 0.0, -r / 2.0));
+        m.add_atom::<1>(Vec3::new(0.0, 0.0, r / 2.0));
+        let e = rhf_with_basis(&m, BasisSet::Pople631g).unwrap().energy;
+        // HF/6-31G H2 at 1.4 bohr: -1.12683 Eh (below STO-3G's -1.11676).
+        assert!((e - (-1.12683)).abs() < 2e-4, "{e}");
+    }
+
+    #[test]
+    fn water_631g_energy() {
+        let mut m = Molecule::new("H2O");
+        let (r, half) = (0.9572, (104.52f64 / 2.0).to_radians());
+        m.add_atom::<8>(Vec3::ZERO);
+        m.add_atom::<1>(Vec3::new(0.0, r * half.sin(), r * half.cos()));
+        m.add_atom::<1>(Vec3::new(0.0, -r * half.sin(), r * half.cos()));
+        let e = rhf_with_basis(&m, BasisSet::Pople631g).unwrap().energy;
+        // HF/6-31G water near experimental geometry: about -75.984 Eh.
+        assert!((e - (-75.984)).abs() < 5e-3, "{e}");
     }
 }

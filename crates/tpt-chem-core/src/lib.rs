@@ -43,6 +43,7 @@ pub mod element;
 pub mod forcefield;
 pub mod molecule;
 pub mod num;
+pub mod potential;
 pub mod rng;
 pub mod special;
 pub mod units;

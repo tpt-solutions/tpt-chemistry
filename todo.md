@@ -365,13 +365,24 @@ usability/automation, and adoption work. Ordered roughly by priority.*
 ### 5.2 Missing features
 
 **Quantum (`tpt-chem-quantum`)**
-- [ ] Spin multiplicity inputs
+- [x] Spin multiplicity inputs (`uhf(mol, multiplicity)`)
 - [x] Charge inputs (`Molecule::set_formal_charge`; electron count = Σ Z − q,
       with H₂²⁺ zero-electron and H₃O⁺ ten-electron tests)
-- [ ] UHF / ROHF (radicals, ions, open shells)
-- [ ] Analytic nuclear gradients
-- [ ] Geometry optimisation (uses gradients)
-- [ ] Larger basis sets (6-31G, cc-pVDZ), heavier elements
+- [x] UHF (`tpt-chem-quantum/src/uhf.rs`: separate α/β Fock, ⟨S²⟩, tests vs
+      H-atom reference, RHF singlet equivalence, H₂ triplet); ROHF left open
+- [x] Analytic nuclear gradients (`tpt-chem-quantum/src/gradient.rs`:
+      `rhf_gradient`, Ha/Bohr; derivative integrals via l±1 raw primitive
+      shells over the existing McMurchie–Davidson code; validated against
+      finite differences for H₂ and water; unscreened/unsymmetrised, so
+      O(nshell⁴) — fine for small molecules). UHF gradients left open
+- [x] Geometry optimisation (`gradient::optimize_geometry`, BFGS +
+      backtracking; H₂ and water reproduce HF/STO-3G minima; the water test
+      is `#[ignore]`d in debug builds — run with `--release -- --ignored`)
+- [ ] Larger basis sets: 6-31G for H–Ne done (`BasisSet::Pople631g`, data
+      from BSE in `basis_631g.rs`; H₂/water energies and gradients
+      validated; `*_with_basis` entry points, CLI `--basis`). Still open:
+      d functions / cc-pVDZ (needs spherical-d, d-shell gradients), heavier
+      elements
 - [ ] Cube output
 - [x] Molden orbital output (`tpt-chem-quantum/src/molden.rs`; molden
       x,y,z p-shell reordering, `[Atoms] (AU)`, occupations from the
@@ -386,32 +397,51 @@ usability/automation, and adoption work. Ordered roughly by priority.*
 - [x] Wire Ewald/PME into the force path: `forces::ForceModel`
       (`AllPairs` / `LjPlusEwald` / `LjPlusPme`) drives the `ensemble`
       run loops with one self-consistent energy/force/virial definition
-- [ ] Exclusion lists and 1-4 scaling
+- [x] Exclusion lists and 1-4 scaling (`tpt-chem-md/src/exclusions.rs`,
+      `System::exclusions`, `Exclusions::from_bonded`; honoured by the all-pairs,
+      neighbor-list, LJ-long-range and virial paths; Ewald/PME subtract the
+      scaled pairs' missing Coulomb). The pass also fixed two real bugs:
+      the Ewald real-space force had the wrong sign (invisible to symmetric
+      lattice tests; now FD-regression-tested) and `ForceModel::LjPlusPme`
+      returned only the mesh part, omitting real-space and self terms
 - [x] Pressure / virial: `virial_all_pairs`, `ewald_virial`, PME
       virial, `ensemble::pressure_bar` (`(2KE/3 + W/3)/V` in bar via
       `KJ_MOL_ANG3_TO_BAR`)
 - [x] Energy minimisation: steepest descent with backtracking line
       search (`tpt-chem-md/src/minimiser.rs`); L-BFGS left open
-- [ ] Constraints: SHAKE / RATTLE
+- [x] Constraints: SHAKE / RATTLE (`tpt-chem-md/src/constraints.rs`;
+      `Constraints::step` = constrained velocity Verlet over any `ForceModel`;
+      rigidity + energy-drift tests; DOF correction left to the caller)
 - [x] Ready-made run loops: `ensemble::run_nve` / `run_nvt` /
       `run_npt` (`NptSettings`), snapshot reports with mean T/E/P
 - [x] Observables: RDF (ideal-gas normalized, lattice-shell test), MSD
       (time-origin averaged), VACF, Einstein and Green–Kubo diffusion
       (`tpt-chem-md/src/observables.rs`; VDOS via FFT of the VACF left as
       a user step)
-- [ ] Force-field parameter library (OPLS/AMBER/UFF subset, SPC/TIP3P water)
-- [ ] Topology builder: bond perception from geometry, atom-type assignment
+- [ ] Force-field parameter library: SPC and TIP3P rigid water done
+      (`tpt-chem-md/src/water.rs`: `water_box` wires charges, intramolecular
+      exclusions and SHAKE constraints; `examples/water_pme.rs` gives
+      −39.7 kJ/mol/molecule PE at 300 K with PME and ~1 kJ/mol NVE drift
+      over 500 fs in a 64-molecule box). OPLS/AMBER/UFF subsets still open
+- [x] Topology builder (`tpt-chem-md/src/topology.rs`: `build_system` does bond
+      perception, geometry-referenced bonds/angles, OPLS-like element LJ,
+      exclusions + 1-4 scaling; deliberately generic — no torsions or
+      transferable atom typing, which stay with the OPLS/AMBER item). Also
+      fixed: `ForceModel::evaluate` and the Verlet integrator ignored
+      `System::bonded` (virial alone included it), so flexible molecules
+      felt no bonded forces
 
 **Kinetics (`tpt-chem-kinetics`)**
 - [x] Tau-leaping (`solver::tau_leap`, Poisson counts with negative-
       population halving guard; means validated against SSA)
-- [ ] Next-reaction-method SSA
+- [x] Next-reaction-method SSA (`solver::next_reaction[_events]`, Gibson–Bruck
+      with dependency graph and putative-time rescaling; mean-decay test)
 - [ ] Parameter fitting and sensitivity analysis
 
 **Crystal (`tpt-chem-crystal`)**
 - [ ] Full 230 space groups (generate from Hall symbols)
 - [ ] CIF → structure → XRD pipeline helper
-- [ ] Supercell and slab builders
+- [x] Supercell and slab builders (`tpt-chem-crystal/src/build.rs`)
 
 **I/O (`tpt-chem-io`)**
 - [x] `.gro` reader/writer (`tpt-chem-io/src/gro.rs`, nm↔Å at the API
@@ -423,8 +453,10 @@ usability/automation, and adoption work. Ordered roughly by priority.*
 
 - [ ] Python bindings (PyO3 + maturin), ASE/MDAnalysis interop
 - [ ] WASM build and a browser demo ("run HF in your browser")
-- [ ] ASE-style `Calculator` / `Potential` trait (energy + forces) shared by
-      MD, HF and ML potentials
+- [x] ASE-style `Potential` trait (`tpt-chem-core/src/potential.rs`, no_std;
+      Å / kJ·mol⁻¹ units) with a generic BFGS `minimize_bfgs`; implemented
+      by `RhfPotential` (quantum) and `ModelPotential` (MD); ML potentials
+      can plug in the same way
 - [ ] ML interatomic-potential plug-in (pure-Rust MLP or ONNX) driving the
       same integrators
 - [ ] Autodiff hooks for differentiable molecular design (per README promise)
@@ -435,8 +467,9 @@ usability/automation, and adoption work. Ordered roughly by priority.*
 
 ### 5.4 Usability & automation
 
-- [ ] `tpt-chem` CLI: `hf`, `md`, `xrd`, `kinetics` subcommands with
-      TOML/JSON inputs
+- [ ] `tpt-chem` CLI: `hf` (RHF/UHF, `--grad`, `--opt`, XYZ out) and `xrd`
+      (CIF → peaks) done in `tpt-chemistry/src/bin/tpt-chem.rs`; `md` and
+      `kinetics` subcommands and TOML/JSON inputs still open
 - [ ] Feature-gated `serde` support for `Molecule`, `System`, result structs
 - [ ] Per-crate `prelude` modules and a `System` builder
 - [ ] CI: criterion benchmark job with regression alerts

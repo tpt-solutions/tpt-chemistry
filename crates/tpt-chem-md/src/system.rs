@@ -31,6 +31,9 @@ pub struct System {
     /// Optional bonded topology; when present, every force evaluation adds
     /// the bonded energy/forces on top of the nonbonded pair terms.
     pub bonded: Option<crate::bonded::Bonded>,
+    /// Optional nonbonded exclusions / 1-4 scaling applied by every pair
+    /// kernel (see [`crate::exclusions`]).
+    pub exclusions: Option<crate::exclusions::Exclusions>,
     /// Last potential energy reported by a force evaluation (kJ·mol⁻¹).
     pub potential_energy: f64,
 }
@@ -134,10 +137,23 @@ impl System {
         2.0 * self.kinetic_energy() / (dof * tpt_chem_core::units::BOLTZMANN_KJ_PER_MOL_K)
     }
 
+    /// Add the bonded topology's forces and energy (when present) to a
+    /// nonbonded `(forces, energy)` result.
+    pub fn with_bonded(&self, (mut f, mut e): (Vec<Vec3>, f64)) -> (Vec<Vec3>, f64) {
+        if let Some(b) = &self.bonded {
+            let (fb, eb) = crate::bonded::bonded_energy_forces(b, &self.pos);
+            for (x, y) in f.iter_mut().zip(&fb) {
+                *x += *y;
+            }
+            e += eb;
+        }
+        (f, e)
+    }
+
     /// Recompute forces and potential energy (all-pairs reference path)
     /// and store the energy in [`System::potential_energy`].
     pub fn update_forces(&mut self) {
-        let (f, e) = forces::forces_all_pairs(self, self.box_, None);
+        let (f, e) = self.with_bonded(forces::forces_all_pairs(self, self.box_, None));
         self.force = f;
         self.potential_energy = e;
     }

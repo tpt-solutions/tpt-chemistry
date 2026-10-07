@@ -33,9 +33,12 @@
 //! ```
 
 pub mod basis;
+mod basis_631g;
 pub mod boys;
 pub mod gaussian;
+pub mod gradient;
 pub mod hf;
 pub mod integrals;
 pub mod linalg;
 pub mod molden;
+pub mod uhf;

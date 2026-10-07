@@ -68,3 +68,12 @@ required-features = ["core", "crystal"]
 [[example]]
 name = "cif_to_xrd"
 required-features = ["core", "io", "crystal"]
+
+[[bin]]
+name = "tpt-chem"
+path = "src/bin/tpt-chem.rs"
+required-features = ["core", "io", "quantum", "crystal"]
+
+[[example]]
+name = "water_pme"
+required-features = ["core", "md"]

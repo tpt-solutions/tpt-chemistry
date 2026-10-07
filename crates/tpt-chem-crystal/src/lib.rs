@@ -10,6 +10,7 @@
 //! vectors are row vectors of the conventional cell.
 
 pub mod bravais;
+pub mod build;
 pub mod kpoints;
 pub mod miller;
 pub mod symmetry;
