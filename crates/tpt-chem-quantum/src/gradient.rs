@@ -51,17 +51,17 @@ fn comp_shift(c: (u8, u8, u8), ax: usize, delta: i8) -> (u8, u8, u8) {
 /// by `eval`, where `shell` occupies tensor position `pos` and `dims` are
 /// the tensor dimensions with the original shell's component count at
 /// `pos`. `eval` receives a raw shell to substitute at that position.
-fn deriv_tensor(
+fn deriv_tensors(
     shell: &Shell,
-    ax: usize,
     pos: usize,
     dims: [usize; 4],
     eval: &dyn Fn(&Shell) -> Vec<f64>,
-) -> Vec<f64> {
+) -> [Vec<f64>; 3] {
     let outer: usize = dims[..pos].iter().product();
     let inner: usize = dims[pos + 1..].iter().product();
     let dpos = dims[pos];
-    let mut out = vec![0.0; dims.iter().product()];
+    let total: usize = dims.iter().product();
+    let mut out = [vec![0.0; total], vec![0.0; total], vec![0.0; total]];
     let comps = cartesian_components(shell.l);
     let plus_comps = cartesian_components(shell.l + 1);
     let minus_comps = if shell.l > 0 {
@@ -78,6 +78,7 @@ fn deriv_tensor(
         },
     );
     for &(alpha, c) in &shell.primitives {
+        // The raw l+-1 tensors do not depend on the axis: evaluate once.
         let tp = eval(&raw_shell(shell.l + 1, shell.center, alpha));
         let tm = if shell.l > 0 {
             Some(eval(&raw_shell(shell.l - 1, shell.center, alpha)))
@@ -86,26 +87,29 @@ fn deriv_tensor(
         };
         for (ic, &comp) in comps.iter().enumerate() {
             let base = c * shell.normalizations[ic] * primitive_normalization(alpha, comp);
-            let ip = plus_comps
-                .iter()
-                .position(|&x| x == comp_shift(comp, ax, 1))
-                .expect("plus component");
-            let wp = base * 2.0 * alpha;
-            let l_ax = comp_axis(comp, ax);
-            let minus = if l_ax > 0 {
-                let im = minus_comps
+            for ax in 0..3 {
+                let ip = plus_comps
                     .iter()
-                    .position(|&x| x == comp_shift(comp, ax, -1))
-                    .expect("minus component");
-                Some((im, -base * f64::from(l_ax)))
-            } else {
-                None
-            };
-            for o in 0..outer {
-                for n in 0..inner {
-                    out[(o * dpos + ic) * inner + n] += wp * tp[(o * dp + ip) * inner + n];
-                    if let (Some((im, wm)), Some(tm)) = (minus, tm.as_ref()) {
-                        out[(o * dpos + ic) * inner + n] += wm * tm[(o * dm + im) * inner + n];
+                    .position(|&x| x == comp_shift(comp, ax, 1))
+                    .expect("plus component");
+                let wp = base * 2.0 * alpha;
+                let l_ax = comp_axis(comp, ax);
+                let minus = if l_ax > 0 {
+                    let im = minus_comps
+                        .iter()
+                        .position(|&x| x == comp_shift(comp, ax, -1))
+                        .expect("minus component");
+                    Some((im, -base * f64::from(l_ax)))
+                } else {
+                    None
+                };
+                for o in 0..outer {
+                    for n in 0..inner {
+                        out[ax][(o * dpos + ic) * inner + n] += wp * tp[(o * dp + ip) * inner + n];
+                        if let (Some((im, wm)), Some(tm)) = (minus, tm.as_ref()) {
+                            out[ax][(o * dpos + ic) * inner + n] +=
+                                wm * tm[(o * dm + im) * inner + n];
+                        }
                     }
                 }
             }
@@ -130,8 +134,8 @@ fn d2(
     op: &dyn Fn(&Shell, &Shell) -> Vec<Vec<f64>>,
 ) -> ([Vec<f64>; 3], [Vec<f64>; 3]) {
     let dims = [n_cartesian(a.l), n_cartesian(b.l), 1, 1];
-    let da = [0, 1, 2].map(|ax| deriv_tensor(a, ax, 0, dims, &|raw| flat2(op(raw, b))));
-    let db = [0, 1, 2].map(|ax| deriv_tensor(b, ax, 1, dims, &|raw| flat2(op(a, raw))));
+    let da = deriv_tensors(a, 0, dims, &|raw| flat2(op(raw, b)));
+    let db = deriv_tensors(b, 1, dims, &|raw| flat2(op(a, raw)));
     (da, db)
 }
 
@@ -257,10 +261,55 @@ pub fn rhf_gradient_with_basis(
     }
 
     // Two-electron terms: 1/2 sum Gamma_ijkl d(ij|kl), Gamma = D_ij D_kl - 1/2 D_ik D_jl.
+    // (ij|kl) has 8-fold permutational symmetry, so only unique shell
+    // quartets are visited, with Gamma symmetrized over the 8 operations
+    // and weighted by the orbit size. Quartets whose Schwarz bound times
+    // the largest density weight is negligible are skipped.
+    let schwarz: Vec<f64> = (0..ns * ns)
+        .map(|ab| {
+            let (a, b) = (ab / ns, ab % ns);
+            let t = eri_shell(&shells[a], &shells[b], &shells[a], &shells[b]);
+            t.iter()
+                .flatten()
+                .flatten()
+                .flatten()
+                .fold(0.0f64, |m, &x| m.max(x.abs()))
+                .sqrt()
+        })
+        .collect();
+    let gamma = |i: usize, j: usize, k: usize, l: usize| {
+        0.5 * (d[i * nb + j] * d[k * nb + l] - 0.5 * d[i * nb + k] * d[j * nb + l])
+    };
+    let gamma_sym = |i: usize, j: usize, k: usize, l: usize| {
+        0.125
+            * (gamma(i, j, k, l)
+                + gamma(j, i, k, l)
+                + gamma(i, j, l, k)
+                + gamma(j, i, l, k)
+                + gamma(k, l, i, j)
+                + gamma(l, k, i, j)
+                + gamma(k, l, j, i)
+                + gamma(l, k, j, i))
+    };
+    let d_max = d.iter().fold(0.0f64, |m, &x| m.max(x.abs()));
     for a in 0..ns {
-        for b in 0..ns {
-            for c in 0..ns {
-                for dd in 0..ns {
+        for b in 0..=a {
+            for c in 0..=a {
+                let dmax_end = if c == a { b } else { c };
+                for dd in 0..=dmax_end {
+                    if schwarz[a * ns + b] * schwarz[c * ns + dd] * d_max * d_max < 1e-12 {
+                        continue;
+                    }
+                    let mut deg = 8.0;
+                    if a == b {
+                        deg /= 2.0;
+                    }
+                    if c == dd {
+                        deg /= 2.0;
+                    }
+                    if a == c && b == dd {
+                        deg /= 2.0;
+                    }
                     let q = [a, b, c, dd];
                     let sh = [&shells[a], &shells[b], &shells[c], &shells[dd]];
                     let dims = [
@@ -270,22 +319,16 @@ pub fn rhf_gradient_with_basis(
                         n_cartesian(sh[3].l),
                     ];
                     let off = [offsets[a], offsets[b], offsets[c], offsets[dd]];
-                    // Skip quartets whose density weight is negligible.
-                    let mut gam = vec![0.0; dims.iter().product()];
-                    let mut idx = 0;
+                    let mut gam = Vec::with_capacity(dims.iter().product());
                     let mut any = false;
                     for i in 0..dims[0] {
                         for j in 0..dims[1] {
                             for k in 0..dims[2] {
                                 for l in 0..dims[3] {
-                                    let (gi, gj, gk, gl) =
-                                        (off[0] + i, off[1] + j, off[2] + k, off[3] + l);
-                                    let g = 0.5
-                                        * (d[gi * nb + gj] * d[gk * nb + gl]
-                                            - 0.5 * d[gi * nb + gk] * d[gj * nb + gl]);
+                                    let g = deg
+                                        * gamma_sym(off[0] + i, off[1] + j, off[2] + k, off[3] + l);
                                     any |= g.abs() > 1e-14;
-                                    gam[idx] = g;
-                                    idx += 1;
+                                    gam.push(g);
                                 }
                             }
                         }
@@ -293,20 +336,22 @@ pub fn rhf_gradient_with_basis(
                     if !any {
                         continue;
                     }
-                    for ax in 0..3 {
-                        let mut sum_abc = 0.0;
-                        for pos in 0..3 {
-                            let eval = |raw: &Shell| -> Vec<f64> {
-                                let mut s = [sh[0], sh[1], sh[2], sh[3]];
-                                s[pos] = raw;
-                                flat4(eri_shell(s[0], s[1], s[2], s[3]))
-                            };
-                            let t = deriv_tensor(sh[pos], ax, pos, dims, &eval);
-                            let g: f64 = t.iter().zip(&gam).map(|(x, y)| x * y).sum();
+                    let mut sum_abc = [0.0; 3];
+                    for pos in 0..3 {
+                        let eval = |raw: &Shell| -> Vec<f64> {
+                            let mut s = [sh[0], sh[1], sh[2], sh[3]];
+                            s[pos] = raw;
+                            flat4(eri_shell(s[0], s[1], s[2], s[3]))
+                        };
+                        let t = deriv_tensors(sh[pos], pos, dims, &eval);
+                        for ax in 0..3 {
+                            let g: f64 = t[ax].iter().zip(&gam).map(|(x, y)| x * y).sum();
                             add(&mut grad, owner[q[pos]], ax, g);
-                            sum_abc += g;
+                            sum_abc[ax] += g;
                         }
-                        add(&mut grad, owner[dd], ax, -sum_abc);
+                    }
+                    for ax in 0..3 {
+                        add(&mut grad, owner[dd], ax, -sum_abc[ax]);
                     }
                 }
             }

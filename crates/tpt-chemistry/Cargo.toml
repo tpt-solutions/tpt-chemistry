@@ -72,7 +72,7 @@ required-features = ["core", "io", "crystal"]
 [[bin]]
 name = "tpt-chem"
 path = "src/bin/tpt-chem.rs"
-required-features = ["core", "io", "quantum", "crystal"]
+required-features = ["core", "io", "quantum", "crystal", "md", "kinetics"]
 
 [[example]]
 name = "water_pme"

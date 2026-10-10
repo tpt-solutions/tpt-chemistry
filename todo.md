@@ -373,8 +373,7 @@ usability/automation, and adoption work. Ordered roughly by priority.*
 - [x] Analytic nuclear gradients (`tpt-chem-quantum/src/gradient.rs`:
       `rhf_gradient`, Ha/Bohr; derivative integrals via l±1 raw primitive
       shells over the existing McMurchie–Davidson code; validated against
-      finite differences for H₂ and water; unscreened/unsymmetrised, so
-      O(nshell⁴) — fine for small molecules). UHF gradients left open
+      finite differences for H₂ and water; 
 - [x] Geometry optimisation (`gradient::optimize_geometry`, BFGS +
       backtracking; H₂ and water reproduce HF/STO-3G minima; the water test
       is `#[ignore]`d in debug builds — run with `--release -- --ignored`)
@@ -467,9 +466,11 @@ usability/automation, and adoption work. Ordered roughly by priority.*
 
 ### 5.4 Usability & automation
 
-- [ ] `tpt-chem` CLI: `hf` (RHF/UHF, `--grad`, `--opt`, XYZ out) and `xrd`
-      (CIF → peaks) done in `tpt-chemistry/src/bin/tpt-chem.rs`; `md` and
-      `kinetics` subcommands and TOML/JSON inputs still open
+- [x] `tpt-chem` CLI (`tpt-chemistry/src/bin/tpt-chem.rs`): `hf` (RHF/UHF,
+      `--basis`, `--grad`, `--opt`), `xrd`, `md` (rigid water box with PME, or
+      an XYZ via the topology builder, optional minimise/trajectory), and
+      `kinetics` (plain-text network → ODE or SSA CSV). TOML/JSON inputs
+      left open
 - [ ] Feature-gated `serde` support for `Molecule`, `System`, result structs
 - [ ] Per-crate `prelude` modules and a `System` builder
 - [ ] CI: criterion benchmark job with regression alerts
