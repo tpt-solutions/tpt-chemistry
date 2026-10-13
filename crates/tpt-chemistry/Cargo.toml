@@ -18,6 +18,7 @@ io = ["dep:tpt-chem-io"]
 md = ["dep:tpt-chem-md"]
 quantum = ["dep:tpt-chem-quantum"]
 kinetics = ["dep:tpt-chem-kinetics"]
+aqueous = ["dep:tpt-chem-aqueous"]
 crystal = ["dep:tpt-chem-crystal"]
 verify = ["dep:tpt-chem-verify"]
 
@@ -27,6 +28,7 @@ tpt-chem-io = { workspace = true, optional = true }
 tpt-chem-md = { workspace = true, optional = true }
 tpt-chem-quantum = { workspace = true, optional = true }
 tpt-chem-kinetics = { workspace = true, optional = true }
+tpt-chem-aqueous = { workspace = true, optional = true }
 tpt-chem-crystal = { workspace = true, optional = true }
 tpt-chem-verify = { workspace = true, optional = true }
 

@@ -6,6 +6,7 @@ members = [
     "crates/tpt-chem-md",
     "crates/tpt-chem-quantum",
     "crates/tpt-chem-kinetics",
+    "crates/tpt-chem-aqueous",
     "crates/tpt-chem-crystal",
     "crates/tpt-chem-verify",
     "crates/tpt-chemistry",
@@ -29,6 +30,7 @@ tpt-chem-md = { version = "0.1.0", path = "crates/tpt-chem-md" }
 tpt-chem-quantum = { version = "0.1.0", path = "crates/tpt-chem-quantum" }
 tpt-chem-kinetics = { version = "0.1.0", path = "crates/tpt-chem-kinetics" }
 tpt-chem-crystal = { version = "0.1.0", path = "crates/tpt-chem-crystal" }
+tpt-chem-aqueous = { version = "0.1.0", path = "crates/tpt-chem-aqueous" }
 tpt-chem-verify = { version = "0.1.0", path = "crates/tpt-chem-verify" }
 
 # Sibling TPT crates (local path deps; also `MIT OR Apache-2.0`).

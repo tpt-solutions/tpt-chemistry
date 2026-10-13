@@ -10,6 +10,7 @@
 //! | `md` | `tpt-chem-md` | integrators, thermostats, cell/neighbor lists, Ewald |
 //! | `quantum` | `tpt-chem-quantum` | GTO basis sets, ERIs, SCF / Hartree-Fock |
 //! | `kinetics` | `tpt-chem-kinetics` | mass-action networks, SSA, Arrhenius/Eyring |
+//! | `aqueous` | `tpt-chem-aqueous` | activity coefficients (DH, Davies, Pitzer, eNRTL), Ksp, chelator-controlled Ca-phosphate precipitation |
 //! | `crystal` | `tpt-chem-crystal` | Bravais lattices, space groups, XRD |
 //! | `verify` | `tpt-chem-verify` | proptest strategies, conservation checks, Kani proofs |
 //!
@@ -34,6 +35,8 @@ pub use tpt_chem_core;
 pub use tpt_chem_crystal;
 #[cfg(feature = "io")]
 pub use tpt_chem_io;
+#[cfg(feature = "aqueous")]
+pub use tpt_chem_aqueous;
 #[cfg(feature = "kinetics")]
 pub use tpt_chem_kinetics;
 #[cfg(feature = "md")]
@@ -50,6 +53,8 @@ pub use tpt_chem_core as core;
 pub use tpt_chem_crystal as crystal;
 #[cfg(feature = "io")]
 pub use tpt_chem_io as io;
+#[cfg(feature = "aqueous")]
+pub use tpt_chem_aqueous as aqueous;
 #[cfg(feature = "kinetics")]
 pub use tpt_chem_kinetics as kinetics;
 #[cfg(feature = "md")]
