@@ -288,6 +288,35 @@ re-export crate and a full workspace hygiene pass.*
 - [x] README: integration/synergy notes per spec.txt §5
 - [x] Publishing explicitly out-of-scope for this pass (local git only, matching tpt-math's initial approach)
 
+## Phase 6 — Aqueous Thermodynamics (post-Phase-5 addition)
+
+*Activity coefficients, solubility products and chelator-controlled calcium
+phosphate precipitation. Depends on: none (own constants; `libm` not needed).
+Parameter defaults for phosphate and ligand constants are illustrative and
+must be replaced with measured data.*
+
+### tpt-chem-aqueous
+
+- [x] Scaffold `crates/tpt-chem-aqueous/` and workspace/umbrella wiring (`aqueous` feature)
+- [x] Constants, water density/permittivity, Debye–Hückel A_φ / A_γ / B(T)
+- [x] Species, ionic strength and charge-balance helpers
+- [x] Activity models: limiting law, extended Debye–Hückel, Davies
+- [x] Pitzer ion-interaction model with osmotic coefficient (NaCl, KCl, CaCl₂ validated; Gibbs–Duhem checked)
+- [x] eNRTL model (dilute limit, Gibbs–Duhem residual test) — **no validated parameter sets yet**
+- [x] Van't Hoff equilibrium constants and solubility products / saturation indices
+- [x] H₃PO₄ / Ca–phosphate constants and candidate phases (brushite, ACP, OCP; HAP opt-in)
+- [x] Multi-site Ca²⁺ chelator binding (casein-phosphopeptide-like defaults)
+- [x] Coupled speciation with activity-coefficient iteration, pH × T scans, onset-pH search
+- [x] Unit tests, doctests, rustdoc; `cargo fmt` / `clippy -D warnings` / rustdoc clean (standalone build)
+- [x] `tpt-chem-verify` proptest properties (DH monotonicity, Pitzer finiteness, van't Hoff, Ca/P balances, chelator monotonicity)
+- [x] `cpp_calcium_phosphate` example (umbrella crate, `aqueous` feature)
+- [x] README crate and example table rows
+- [ ] Build and test inside the full workspace (needs `../tpt-math` checkout; not available in the authoring container)
+- [ ] `cargo deny check` clean with the new crate
+- [ ] Validate Pitzer/eNRTL and phosphate constants against measured data; document sources
+- [ ] Nucleation/kinetic onset model (currently thermodynamic saturation only)
+- [ ] Add an entry for `tpt-chem-aqueous` to `spec.txt` §4
+
 ---
 
 ## Known open items after this pass
