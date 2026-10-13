@@ -39,7 +39,10 @@ fn main() {
     let with_cpp = system(Some(3e-3)).onset_curve(&t_grid, 4.0, 9.0).unwrap();
 
     println!("Onset pH of calcium phosphate supersaturation (SI = 0), Ca 5 mM, P 3 mM, pH 4–9:");
-    println!("{:>8}  {:>12}  {:>22}", "T / °C", "no chelator", "with CPP (3 mM)");
+    println!(
+        "{:>8}  {:>12}  {:>22}",
+        "T / °C", "no chelator", "with CPP (3 mM)"
+    );
     for ((c, (_, b)), (_, w)) in temperatures_c.iter().zip(&bare).zip(&with_cpp) {
         println!("{c:>8.0}  {:>12}  {:>22}", describe(*b), describe(*w));
     }
