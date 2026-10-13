@@ -315,7 +315,7 @@ must be replaced with measured data.*
 - [ ] `cargo deny check` clean with the new crate
 - [ ] Validate Pitzer/eNRTL and phosphate constants against measured data; document sources
 - [ ] Nucleation/kinetic onset model (currently thermodynamic saturation only)
-- [ ] Add an entry for `tpt-chem-aqueous` to `spec.txt` §4
+- [x] Add an entry for `tpt-chem-aqueous` to `spec.txt` §4
 
 ---
 

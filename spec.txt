@@ -21,6 +21,7 @@ tpt-chemistry/
 │   ├── tpt-chem-quantum/      # Electronic structure: Gaussian basis sets, SCF, Hartree-Fock, integral evaluation
 │   ├── tpt-chem-kinetics/     # Reaction kinetics: Mass-action ODEs, stochastic simulation (Gillespie), Arrhenius
 │   ├── tpt-chem-crystal/      # Solid state: Bravais lattices, space groups, reciprocal space, XRD simulation
+│   ├── tpt-chem-aqueous/      # Aqueous thermodynamics: activity models (DH, Davies, Pitzer, eNRTL), Ksp, chelator-controlled Ca-phosphate precipitation
 │   ├── tpt-chem-io/           # File formats: XYZ, PDB, CIF, MOL2, Gaussian input/output parsing
 │   ├── tpt-chem-verify/       # Verification harnesses: Kani proofs, proptest strategies, conservation law checks
 │   └── tpt-chemistry/         # Feature-gated umbrella crate re-exporting all above
@@ -69,6 +70,14 @@ Bravais lattice generation, Miller indices, and Wigner-Seitz cell construction.
 Space group symmetry operations and Wyckoff positions.
 Reciprocal lattice generation and Brillouin zone sampling (k-point grids).
 X-ray diffraction (XRD) pattern simulation from structure factors.
+tpt-chem-aqueous
+Purpose: Activity coefficients, solubility products and precipitation onset for aqueous electrolyte solutions.
+Key Features:
+Activity-coefficient models for multi-component electrolytes: Debye-Hückel limiting law and extended form, Davies, Pitzer ion-interaction (with osmotic coefficient), and single-solvent eNRTL.
+Van't Hoff temperature dependence of equilibrium constants; solubility products and saturation indices for solid phases.
+Calcium-phosphate speciation (H3PO4 acid system, Ca-phosphate ion pairs) with multi-site chelator binding (e.g. casein phosphopeptides).
+pH x temperature scans and onset-pH search for thermodynamic supersaturation.
+Constants shipped as defaults are illustrative and must be replaced with measured data; predictions are thermodynamic, not nucleation-kinetic.
 tpt-chem-io
 Purpose: Interoperability with standard chemical file formats.
 Key Features:
