@@ -16,6 +16,7 @@ tpt-chem-core = { workspace = true }
 tpt-chem-md = { workspace = true }
 tpt-chem-quantum = { workspace = true }
 tpt-chem-kinetics = { workspace = true }
+tpt-chem-aqueous = { workspace = true }
 proptest = { workspace = true }
 
 [lints.rust]
