@@ -27,6 +27,7 @@ Runnable end-to-end demos live in the umbrella crate
 | `nacl_pme` | `md` | Direct Ewald vs Particle Mesh Ewald convergence |
 | `lotka_volterra_ssa` | `kinetics` | Gillespie SSA vs mass-action ODE |
 | `michaelis_menten` | `kinetics` | Enzyme kinetics, both regimes |
+| `cpp_calcium_phosphate` | `aqueous` | Calcium-phosphate onset pH vs temperature, with and without a chelator |
 | `silicon_xrd` | `crystal` | Diamond-structure powder pattern as CSV |
 | `nacl_xrd` | `crystal` | Rock-salt extinctions and peak families |
 | `cif_to_xrd` | `io`, `crystal` | CIF text → structure → diffraction pipeline |
@@ -70,6 +71,7 @@ CI performs the same sibling checkout in every job (see
 | [`tpt-chem-md`](crates/tpt-chem-md) | Integrators, thermostats/barostat, cell/neighbor lists, Ewald + PME (in-house FFT), virial/pressure, NVE/NVT/NPT run loops, energy minimisation |
 | [`tpt-chem-quantum`](crates/tpt-chem-quantum) | Gaussian basis sets, McMurchie–Davidson ERIs, SCF / Hartree–Fock (charged species), Molden orbital output |
 | [`tpt-chem-kinetics`](crates/tpt-chem-kinetics) | Mass-action ODEs, Gillespie SSA, Arrhenius/Eyring rates |
+| [`tpt-chem-aqueous`](crates/tpt-chem-aqueous) | Activity coefficients (Debye–Hückel, Davies, Pitzer, eNRTL), Ksp/saturation indices, chelator-controlled calcium phosphate precipitation onset |
 | [`tpt-chem-crystal`](crates/tpt-chem-crystal) | Bravais lattices, space groups, reciprocal space, XRD simulation |
 | [`tpt-chem-io`](crates/tpt-chem-io) | XYZ, PDB, MOL2, CIF readers/writers, trajectory streaming |
 | [`tpt-chem-verify`](crates/tpt-chem-verify) | proptest strategies, conservation-law checks, Kani harnesses |

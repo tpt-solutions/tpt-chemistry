@@ -79,3 +79,7 @@ required-features = ["core", "io", "quantum", "crystal", "md", "kinetics"]
 [[example]]
 name = "water_pme"
 required-features = ["core", "md"]
+
+[[example]]
+name = "cpp_calcium_phosphate"
+required-features = ["core", "aqueous"]
