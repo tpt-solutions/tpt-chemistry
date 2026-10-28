@@ -28,5 +28,13 @@
 //! ```
 
 pub mod arrhenius;
+pub mod fit;
 pub mod network;
 pub mod solver;
+
+/// Common imports for kinetics: networks, solvers and fitting.
+pub mod prelude {
+    pub use crate::fit::{fit_rates, sensitivity, FitResult, FitSettings, Observation};
+    pub use crate::network::{Reaction, ReactionInput, ReactionNetwork};
+    pub use crate::solver::{integrate, integrate_stiff, ssa};
+}
