@@ -35,6 +35,7 @@
 pub mod basis;
 mod basis_631g;
 pub mod boys;
+pub mod cube;
 pub mod gaussian;
 pub mod gradient;
 pub mod hf;
@@ -42,3 +43,12 @@ pub mod integrals;
 pub mod linalg;
 pub mod molden;
 pub mod uhf;
+
+/// Common imports for Hartree–Fock calculations.
+pub mod prelude {
+    pub use crate::basis::BasisSet;
+    pub use crate::gradient::{optimize_geometry, rhf_gradient_with_basis, OptSettings};
+    pub use crate::hf::{rhf, rhf_with_basis, HfResult};
+    pub use crate::molden::write_molden;
+    pub use crate::uhf::uhf_with_basis;
+}
