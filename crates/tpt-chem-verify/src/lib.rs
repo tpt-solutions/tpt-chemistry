@@ -31,7 +31,8 @@
 //! assert_energy_conserved(&mut sys, 200, 1.0, 5e-3);
 //! ```
 
-pub mod aqueous;
+#[cfg(test)]
+mod aqueous;
 pub mod conservation;
 pub mod mass_conservation;
 #[allow(unexpected_cfgs)]

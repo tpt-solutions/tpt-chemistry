@@ -412,6 +412,96 @@ impl CalciumPhosphateSystem {
             .map(|&t| Ok((t, self.onset_ph(t, ph_lo, ph_hi)?)))
             .collect()
     }
+
+    /// Kinetic onset pH: the pH at which the expected number of nuclei
+    /// formed in `kinetics.observation_time_s` over `kinetics.water_mass_kg`
+    /// reaches one, while raising pH from `ph_lo` to `ph_hi` at temperature
+    /// `t` (K). Unlike [`onset_ph`](Self::onset_ph), this needs a finite
+    /// supersaturation and so never reports onset at `SI ≤ 0`.
+    pub fn kinetic_onset_ph(
+        &self,
+        t: f64,
+        ph_lo: f64,
+        ph_hi: f64,
+        kinetics: &NucleationKinetics,
+    ) -> Result<Onset> {
+        if ph_lo >= ph_hi {
+            return Err(AqueousError::InvalidInput("ph_lo must be below ph_hi"));
+        }
+        let f = |ph: f64| -> f64 {
+            self.max_saturation(ph, t)
+                .map_or(f64::NAN, |(si, _)| kinetics.ln_expected_nuclei(si))
+        };
+        let (flo, fhi) = (f(ph_lo), f(ph_hi));
+        if flo.is_nan() || fhi.is_nan() {
+            return Err(AqueousError::NonFinite("saturation index"));
+        }
+        if flo >= 0.0 {
+            return Ok(Onset::Always);
+        }
+        if fhi < 0.0 {
+            return Ok(Onset::Never);
+        }
+        Ok(Onset::At(brent(f, ph_lo, ph_hi, 1e-8, 200)?))
+    }
+}
+
+/// Empirical nucleation kinetics of a precipitating phase.
+///
+/// The nucleation rate follows the Söhnel–Garside form
+/// `J = A · exp(−B / ln² S)` (nuclei per kg water per second), where
+/// `S = 10^SI` is the supersaturation ratio. `B` plays the role of the
+/// classical barrier term `16πγ³v²/(3k³T³)`, so a larger `B` means a larger
+/// interfacial energy and a later onset.
+///
+/// The defaults are illustrative, not fitted: `A`, `B` and the observation
+/// window must be calibrated against induction-time measurements.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct NucleationKinetics {
+    /// Natural log of the pre-exponential factor `A` (ln[nuclei kg⁻¹ s⁻¹]).
+    pub ln_prefactor: f64,
+    /// Dimensionless barrier constant `B`.
+    pub barrier: f64,
+    /// Mass of solution water that can nucleate, kg.
+    pub water_mass_kg: f64,
+    /// Observation window before turbidity is judged visible, s.
+    pub observation_time_s: f64,
+}
+
+impl NucleationKinetics {
+    /// Floor used for `ln J` when `S ≤ 1`, keeping root-finding finite.
+    const LN_RATE_FLOOR: f64 = -1.0e3;
+
+    /// Natural log of the nucleation rate at saturation index `si`.
+    ///
+    /// Returns [`LN_RATE_FLOOR`](Self::LN_RATE_FLOOR) for `si ≤ 0`, where the
+    /// rate is effectively zero.
+    pub fn ln_nucleation_rate(&self, si: f64) -> f64 {
+        let ln_s = si * LN10;
+        if ln_s <= 0.0 || !ln_s.is_finite() {
+            return Self::LN_RATE_FLOOR;
+        }
+        (self.ln_prefactor - self.barrier / (ln_s * ln_s)).max(Self::LN_RATE_FLOOR)
+    }
+
+    /// Natural log of the expected number of nuclei formed over the
+    /// observation window. Onset occurs where this crosses zero.
+    pub fn ln_expected_nuclei(&self, si: f64) -> f64 {
+        self.ln_nucleation_rate(si) + (self.water_mass_kg * self.observation_time_s).ln()
+    }
+}
+
+impl Default for NucleationKinetics {
+    fn default() -> Self {
+        // Chosen so onset falls near SI ≈ 0.3 for 1 g of water observed for
+        // one hour (ln(1e-3 · 3600) ≈ 1.28, ln²(10^0.3) ≈ 0.48).
+        Self {
+            ln_prefactor: 50.0,
+            barrier: 24.6,
+            water_mass_kg: 1.0e-3,
+            observation_time_s: 3600.0,
+        }
+    }
 }
 
 struct Idx {
@@ -540,5 +630,59 @@ mod tests {
         s.ca_total = 0.0;
         assert!(s.speciate(7.0, 298.15).is_err());
         assert!(system(0.0).speciate(15.0, 298.15).is_err());
+    }
+
+    #[test]
+    fn nucleation_rate_is_zero_when_undersaturated_and_rises_with_si() {
+        let k = NucleationKinetics::default();
+        assert_eq!(
+            k.ln_nucleation_rate(-0.5),
+            NucleationKinetics::LN_RATE_FLOOR
+        );
+        assert_eq!(k.ln_nucleation_rate(0.0), NucleationKinetics::LN_RATE_FLOOR);
+        let (lo, hi) = (k.ln_nucleation_rate(0.2), k.ln_nucleation_rate(0.6));
+        assert!(hi > lo, "{hi} should exceed {lo}");
+    }
+
+    #[test]
+    fn kinetic_onset_is_at_expected_nuclei_unity() {
+        let s = system(0.0);
+        let k = NucleationKinetics::default();
+        let Onset::At(ph) = s.kinetic_onset_ph(310.15, 4.0, 9.0, &k).unwrap() else {
+            panic!("no kinetic onset")
+        };
+        let (si, _) = s.max_saturation(ph, 310.15).unwrap();
+        assert!(si > 0.0, "kinetic onset must be supersaturated, SI = {si}");
+        assert!(k.ln_expected_nuclei(si).abs() < 1e-5);
+    }
+
+    #[test]
+    fn kinetic_onset_never_precedes_thermodynamic_onset() {
+        let s = system(0.0);
+        let k = NucleationKinetics::default();
+        let (Onset::At(thermo), Onset::At(kinetic)) = (
+            s.onset_ph(310.15, 4.0, 9.0).unwrap(),
+            s.kinetic_onset_ph(310.15, 4.0, 9.0, &k).unwrap(),
+        ) else {
+            panic!("expected both onsets")
+        };
+        assert!(kinetic >= thermo, "{kinetic} vs {thermo}");
+    }
+
+    #[test]
+    fn larger_barrier_delays_kinetic_onset() {
+        let s = system(0.0);
+        let base = NucleationKinetics::default();
+        let stiff = NucleationKinetics {
+            barrier: base.barrier * 1.5,
+            ..base
+        };
+        let (Onset::At(p0), Onset::At(p1)) = (
+            s.kinetic_onset_ph(310.15, 4.0, 9.0, &base).unwrap(),
+            s.kinetic_onset_ph(310.15, 4.0, 9.0, &stiff).unwrap(),
+        ) else {
+            panic!("expected both onsets")
+        };
+        assert!(p1 > p0, "{p1} should exceed {p0}");
     }
 }

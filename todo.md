@@ -311,10 +311,10 @@ must be replaced with measured data.*
 - [x] `tpt-chem-verify` proptest properties (DH monotonicity, Pitzer finiteness, van't Hoff, Ca/P balances, chelator monotonicity)
 - [x] `cpp_calcium_phosphate` example (umbrella crate, `aqueous` feature)
 - [x] README crate and example table rows
-- [ ] Build and test inside the full workspace (needs `../tpt-math` checkout; not available in the authoring container)
-- [ ] `cargo deny check` clean with the new crate
+- [x] Build and test inside the full workspace (needs `../tpt-math` checkout; builds and passes with `tpt-math` cloned as a sibling)
+- [x] `cargo deny check` clean with the new crate
 - [ ] Validate Pitzer/eNRTL and phosphate constants against measured data; document sources
-- [ ] Nucleation/kinetic onset model (currently thermodynamic saturation only)
+- [x] Nucleation/kinetic onset model: `NucleationKinetics` (Söhnel–Garside `J = A·exp(−B/ln²S)`) and `CalciumPhosphateSystem::kinetic_onset_ph`; defaults are illustrative and need calibration against induction-time data
 - [x] Add an entry for `tpt-chem-aqueous` to `spec.txt` §4
 
 ---

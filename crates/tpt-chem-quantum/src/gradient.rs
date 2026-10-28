@@ -87,7 +87,7 @@ fn deriv_tensors(
         };
         for (ic, &comp) in comps.iter().enumerate() {
             let base = c * shell.normalizations[ic] * primitive_normalization(alpha, comp);
-            for ax in 0..3 {
+            for (ax, out_ax) in out.iter_mut().enumerate() {
                 let ip = plus_comps
                     .iter()
                     .position(|&x| x == comp_shift(comp, ax, 1))
@@ -105,9 +105,9 @@ fn deriv_tensors(
                 };
                 for o in 0..outer {
                     for n in 0..inner {
-                        out[ax][(o * dpos + ic) * inner + n] += wp * tp[(o * dp + ip) * inner + n];
+                        out_ax[(o * dpos + ic) * inner + n] += wp * tp[(o * dp + ip) * inner + n];
                         if let (Some((im, wm)), Some(tm)) = (minus, tm.as_ref()) {
-                            out[ax][(o * dpos + ic) * inner + n] +=
+                            out_ax[(o * dpos + ic) * inner + n] +=
                                 wm * tm[(o * dm + im) * inner + n];
                         }
                     }
@@ -350,8 +350,8 @@ pub fn rhf_gradient_with_basis(
                             sum_abc[ax] += g;
                         }
                     }
-                    for ax in 0..3 {
-                        add(&mut grad, owner[dd], ax, -sum_abc[ax]);
+                    for (ax, sum) in sum_abc.iter().enumerate() {
+                        add(&mut grad, owner[dd], ax, -sum);
                     }
                 }
             }

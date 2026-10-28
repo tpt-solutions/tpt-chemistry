@@ -1,13 +1,19 @@
 # Contributing to tpt-chemistry
 
-Thanks for your interest in contributing! This document covers the rules that
-keep the workspace healthy.
+Thanks for your interest in contributing! This document covers how to
+contribute and the rules that keep the workspace healthy.
+
+## How to contribute
+
+Contributions are accepted through **issues only**. Please open a GitHub issue
+to report a bug, request a feature, or propose a change. Pull requests from
+outside the project are not accepted.
 
 ## Licensing
 
 - All code is dual-licensed `MIT OR Apache-2.0` (see `LICENSE-MIT` and
-  `LICENSE-APACHE`). By opening a PR you agree to license your contribution
-  under both.
+  `LICENSE-APACHE`). By submitting an issue that includes code or text, you
+  agree to license that contribution under both.
 - **No Apache-2.0-only dependencies.** Per `spec.txt` §2, every crate that
   enters the dependency graph must be MIT, dual `MIT OR Apache-2.0`, or
   otherwise MIT-compatible. `cargo deny check` enforces this — bare
