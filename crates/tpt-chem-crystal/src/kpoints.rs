@@ -5,6 +5,7 @@ use std::vec::Vec;
 
 /// A k-point in fractional reciprocal coordinates plus its weight.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct KPoint {
     /// Fractional reciprocal coordinates.
     pub frac: [f64; 3],

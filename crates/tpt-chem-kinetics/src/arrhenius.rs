@@ -11,6 +11,7 @@ use tpt_chem_core::units::{
 /// kJ·mol⁻¹, `T` in K. The temperature-independent fallback
 /// [`RateLaw::rate_at_300k`] evaluates at `T = 298.15 K`.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Arrhenius {
     /// Pre-exponential factor `A`.
     pub a: f64,
@@ -41,6 +42,7 @@ impl Arrhenius {
 /// `ΔH‡` in kJ·mol⁻¹, `ΔS‡` in J·mol⁻¹·K⁻¹; `k(T)` in s⁻¹ (first-order
 /// units, from the `kB·T/h` prefactor).
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Eyring {
     /// Enthalpy of activation `ΔH‡` (kJ·mol⁻¹).
     pub dh: f64,
@@ -70,6 +72,7 @@ impl Eyring {
 
 /// Generic temperature-dependent rate law.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum RateLaw {
     /// Arrhenius form.
     Arrhenius(Arrhenius),

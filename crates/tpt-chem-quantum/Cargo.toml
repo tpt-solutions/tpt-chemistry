@@ -11,7 +11,15 @@ authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
 
+[features]
+# Serialize result types (forwards to tpt-chem-core/serde).
+serde = ["dep:serde", "tpt-chem-core/serde"]
+
+[dev-dependencies]
+serde_json = { version = "1", features = ["float_roundtrip"] }
+
 [dependencies]
+serde = { version = "1", default-features = false, features = ["derive"], optional = true }
 tpt-chem-core = { workspace = true }
 # NOTE: spec.txt §4 says HF "relies on tpt-math for dense eigenvalue
 # decomposition", but `tpt-math-linalg-dense` exposes no eigensolver and

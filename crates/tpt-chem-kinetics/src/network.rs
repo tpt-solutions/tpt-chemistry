@@ -17,6 +17,7 @@ use crate::arrhenius::RateLaw;
 
 /// How a reaction's rate constant is obtained.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ReactionInput {
     /// Temperature-independent constant.
     Constant(f64),
@@ -26,6 +27,7 @@ pub enum ReactionInput {
 
 /// One elementary reaction.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Reaction {
     /// Reactant stoichiometry: `(species index, multiplicity)` pairs.
     pub reactants: Vec<(usize, f64)>,
@@ -79,6 +81,7 @@ impl std::error::Error for NetworkError {}
 
 /// A mass-action reaction network.
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ReactionNetwork {
     /// Species names, in state-vector order.
     pub species: Vec<String>,

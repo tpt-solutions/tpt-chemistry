@@ -10,6 +10,7 @@ use tpt_chem_core::vec3::Vec3;
 
 /// The 14 Bravais lattice types (lattice system + centering).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Bravais {
     /// Cubic primitive.
     CubicP,
@@ -65,6 +66,7 @@ impl core::fmt::Display for Bravais {
 
 /// A lattice from three conventional cell vectors (row vectors, Å).
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Lattice {
     /// First lattice vector.
     pub a: Vec3,

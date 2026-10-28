@@ -54,6 +54,7 @@ impl Coulomb {
 ///
 /// `V(r) = 4ε[(σ/r)¹² − (σ/r)⁶]`, σ in Å, ε in kJ·mol⁻¹.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LennardJones {
     /// Collision diameter σ (Å).
     pub sigma: f64,
@@ -137,6 +138,7 @@ impl PairPotential {
 ///
 /// `k` in kJ·mol⁻¹·Å⁻², `r₀` in Å.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HarmonicBond {
     /// Force constant (kJ·mol⁻¹·Å⁻²).
     pub k: f64,
@@ -162,6 +164,7 @@ impl HarmonicBond {
 ///
 /// `k` in kJ·mol⁻¹·rad⁻², `θ₀` in radians.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HarmonicAngle {
     /// Force constant (kJ·mol⁻¹·rad⁻²).
     pub k: f64,
@@ -207,6 +210,7 @@ impl HarmonicAngle {
 ///
 /// Coefficients C₀..C₅ in kJ·mol⁻¹.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RyckaertBellemans {
     /// Expansion coefficients C₀..C₅ (kJ·mol⁻¹).
     pub c: [f64; 6],

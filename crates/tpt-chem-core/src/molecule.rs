@@ -30,6 +30,7 @@ use crate::vec3::Vec3;
 /// Handle to an atom inside a [`Molecule`]. Indices are only handed out by
 /// `add_atom*`, so a valid `AtomId` always addresses an existing atom.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AtomId(u16);
 
 impl AtomId {
@@ -53,6 +54,7 @@ impl From<usize> for AtomId {
 
 /// Chemical bond order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BondOrder {
     /// Single bond (order 1).
     Single,
@@ -79,6 +81,7 @@ impl BondOrder {
 /// An atom record: element, Cartesian position (Å), partial charge (e), and
 /// an optional label (e.g. PDB atom name).
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Atom {
     /// Atomic number.
     pub z: u8,
@@ -99,6 +102,7 @@ impl Atom {
 
 /// A bond between two atoms.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Bond {
     /// First endpoint (lower `AtomId`).
     pub a: AtomId,
@@ -134,6 +138,11 @@ impl std::error::Error for MolError {}
 
 /// A molecular graph: atoms + bonds, with adjacency lookups.
 #[derive(Clone, Debug)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(try_from = "MoleculeRepr", into = "MoleculeRepr")
+)]
 pub struct Molecule {
     name: String,
     atoms: Vec<Atom>,
@@ -529,5 +538,99 @@ mod tests {
         m.add_atom::<1>([0.0, 0.0, 1.0].into());
         let th = m.angle(AtomId(0), AtomId(1), AtomId(2));
         assert!((th - core::f64::consts::PI).abs() < 1e-12);
+    }
+}
+
+/// Serialized form of a [`Molecule`]. Derived state (adjacency lists,
+/// element counts) is not stored; it is rebuilt on deserialization.
+#[cfg(feature = "serde")]
+#[derive(serde::Serialize, serde::Deserialize)]
+struct MoleculeRepr {
+    name: String,
+    formal_charge: i32,
+    atoms: Vec<Atom>,
+    bonds: Vec<Bond>,
+}
+
+#[cfg(feature = "serde")]
+impl From<Molecule> for MoleculeRepr {
+    fn from(m: Molecule) -> Self {
+        Self {
+            name: m.name,
+            formal_charge: m.total_charge,
+            atoms: m.atoms,
+            bonds: m.bonds,
+        }
+    }
+}
+
+/// Rebuilds a molecule through the public constructors, so every invariant
+/// (element range, bond validity, adjacency) is checked again.
+#[cfg(feature = "serde")]
+impl TryFrom<MoleculeRepr> for Molecule {
+    type Error = String;
+
+    fn try_from(r: MoleculeRepr) -> Result<Self, Self::Error> {
+        let mut m = Molecule::new(&r.name);
+        for atom in r.atoms {
+            if atom.z == 0 || atom.z > MAX_Z {
+                return Err(alloc::format!("atomic number {} out of range", atom.z));
+            }
+            let id = match &atom.label {
+                Some(label) => m.add_atom_labeled(atom.z, atom.pos, label),
+                None => m.add_atom_raw(atom.z, atom.pos),
+            };
+            m.atom_mut(id).charge = atom.charge;
+        }
+        for b in r.bonds {
+            m.add_bond(b.a, b.b, b.order)
+                .map_err(|e| alloc::format!("bond {}-{}: {e}", b.a.index(), b.b.index()))?;
+        }
+        m.set_formal_charge(r.formal_charge);
+        Ok(m)
+    }
+}
+
+#[cfg(all(test, feature = "serde"))]
+mod serde_tests {
+    use super::*;
+
+    fn water() -> Molecule {
+        let mut m = Molecule::new("water");
+        let o = m.add_atom::<8>(Vec3::new(0.0, 0.0, 0.117));
+        let h1 = m.add_atom_labeled(1, Vec3::new(0.0, 0.757, -0.469), "H1");
+        let h2 = m.add_atom::<1>(Vec3::new(0.0, -0.757, -0.469));
+        m.atom_mut(o).charge = -0.82;
+        m.add_bond(o, h1, BondOrder::Single).unwrap();
+        m.add_bond(o, h2, BondOrder::Single).unwrap();
+        m
+    }
+
+    #[test]
+    fn round_trip_preserves_graph_and_state() {
+        let mol = water();
+        let json = serde_json::to_string(&mol).unwrap();
+        let back: Molecule = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.name(), "water");
+        assert_eq!(back.formula(), "H2O");
+        assert_eq!(back.n_bonds(), 2);
+        assert_eq!(back.atom(0usize.into()).charge, -0.82);
+        assert_eq!(back.atom(1usize.into()).label.as_deref(), Some("H1"));
+        assert_eq!(back.degree(0usize.into()), 2);
+        assert_eq!(back.atom(2usize.into()).pos, mol.atom(2usize.into()).pos);
+    }
+
+    #[test]
+    fn invalid_element_is_an_error_not_a_panic() {
+        let json = r#"{"name":"x","formal_charge":0,"atoms":[{"z":0,"pos":{"x":0,"y":0,"z":0},"charge":0.0,"label":null}],"bonds":[]}"#;
+        assert!(serde_json::from_str::<Molecule>(json).is_err());
+    }
+
+    #[test]
+    fn duplicate_bond_is_rejected() {
+        let mut json: serde_json::Value = serde_json::to_value(water()).unwrap();
+        let bond = json["bonds"][0].clone();
+        json["bonds"].as_array_mut().unwrap().push(bond);
+        assert!(serde_json::from_value::<Molecule>(json).is_err());
     }
 }

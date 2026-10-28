@@ -4,6 +4,7 @@ use tpt_chem_core::vec3::Vec3;
 
 /// An orthorhombic periodic box with edges along the axes.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Box3 {
     /// Box edge lengths (Å).
     pub length: Vec3,

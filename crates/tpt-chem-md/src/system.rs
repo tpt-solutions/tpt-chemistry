@@ -11,6 +11,7 @@ use crate::KJ_MOL_PER_MDU;
 
 /// A classical MD system (structure-of-arrays layout).
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct System {
     /// Positions (Å).
     pub pos: Vec<Vec3>,

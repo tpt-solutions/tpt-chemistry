@@ -15,10 +15,16 @@ repository.workspace = true
 default = ["std"]
 # When disabled the crate is `no_std + alloc` (float transcendental math via libm).
 std = ["tpt-math-units/std"]
+# Serialize/deserialize the core types (no_std-compatible via `alloc`).
+serde = ["dep:serde"]
 
 [dependencies]
 tpt-math-units = { workspace = true, default-features = false }
 libm = { workspace = true }
+serde = { version = "1", default-features = false, features = ["derive", "alloc"], optional = true }
+
+[dev-dependencies]
+serde_json = { version = "1", features = ["float_roundtrip"] }
 
 [lints]
 workspace = true

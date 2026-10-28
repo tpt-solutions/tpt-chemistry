@@ -12,6 +12,7 @@ use crate::bonded::Bonded;
 
 /// Scale factors applied to one pair's LJ and Coulomb interaction.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PairScale {
     /// Lennard-Jones scale (0 = fully excluded).
     pub lj: f64,
@@ -21,6 +22,11 @@ pub struct PairScale {
 
 /// Per-pair scale factors; pairs not listed interact fully.
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(from = "ExclusionsRepr", into = "ExclusionsRepr")
+)]
 pub struct Exclusions {
     map: HashMap<(usize, usize), PairScale>,
 }
@@ -143,5 +149,34 @@ mod tests {
         let ex = Exclusions::from_bonded(&b, 4, 0.5, 0.5);
         assert_eq!(ex.get(0, 2).unwrap().lj, 0.0);
         assert_eq!(ex.get(1, 3).unwrap().lj, 0.0);
+    }
+}
+
+/// Serialized form of [`Exclusions`]: a list of pairs sorted by atom
+/// indices. JSON object keys must be strings, and `HashMap` iteration order
+/// is random, so the map is not serialized directly.
+#[cfg(feature = "serde")]
+#[derive(serde::Serialize, serde::Deserialize)]
+struct ExclusionsRepr {
+    pairs: Vec<(usize, usize, PairScale)>,
+}
+
+#[cfg(feature = "serde")]
+impl From<Exclusions> for ExclusionsRepr {
+    fn from(e: Exclusions) -> Self {
+        let mut pairs: Vec<_> = e.iter().collect();
+        pairs.sort_by_key(|&(a, b, _)| (a, b));
+        Self { pairs }
+    }
+}
+
+#[cfg(feature = "serde")]
+impl From<ExclusionsRepr> for Exclusions {
+    fn from(r: ExclusionsRepr) -> Self {
+        let mut e = Exclusions::new();
+        for (a, b, scale) in r.pairs {
+            e.set(a, b, scale);
+        }
+        e
     }
 }

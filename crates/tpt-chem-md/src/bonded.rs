@@ -17,6 +17,7 @@ use tpt_chem_core::vec3::Vec3;
 
 /// A bonded topology: parallel lists of terms with particle indices.
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Bonded {
     /// Harmonic bonds `(particles, parameters)`.
     pub bonds: Vec<([usize; 2], HarmonicBond)>,

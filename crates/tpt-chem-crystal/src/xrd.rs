@@ -17,6 +17,7 @@ use tpt_chem_core::vec3::Vec3;
 
 /// One simulated powder-diffraction peak.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Reflection {
     /// Miller index.
     pub miller: Miller,

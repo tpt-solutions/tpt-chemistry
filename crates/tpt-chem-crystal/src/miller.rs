@@ -10,6 +10,7 @@ use tpt_chem_core::vec3::Vec3;
 
 /// Miller index `(h k l)`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Miller {
     /// h index.
     pub h: i32,

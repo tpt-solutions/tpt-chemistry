@@ -65,6 +65,7 @@ impl std::error::Error for HfError {}
 
 /// Result of a converged restricted HF calculation.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HfResult {
     /// Total electronic + nuclear energy (Hartree).
     pub energy: f64,
