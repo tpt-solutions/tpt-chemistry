@@ -249,8 +249,8 @@ electrostatics, and formal (Kani) verification.*
 
 - [x] Kani harnesses gated behind cfg(kani) (cell-index bounds, Ewald indices, Verlet skin); CI job on Linux
 - [x] Kani proof: neighbor-list cell indexing is always in-bounds
-- [ ] Kani proof: SCF iteration density matrices remain positive semi-definite
-- [ ] Kani proof: absence of panics in ERI evaluation, including r→0 singularity handling
+- [x] Kani proof: SCF iteration density matrices remain positive semi-definite
+- [x] Kani proof: absence of panics in ERI evaluation, including r→0 singularity handling
 - [x] proptest: Velocity Verlet conserves phase-space volume (harmonic-oscillator Jacobian determinant = 1)
 - [x] Unit tests + doctests
 - [x] Rustdoc
@@ -468,7 +468,7 @@ usability/automation, and adoption work. Ordered roughly by priority.*
 
 **Crystal (`tpt-chem-crystal`)**
 - [ ] Full 230 space groups (generate from Hall symbols)
-- [ ] CIF → structure → XRD pipeline helper
+- [x] CIF → structure → XRD pipeline helper (`tpt_chemistry::pipeline::{xrd_from_cif, lattice_from_cif, structure_from_cif}`, behind `io`+`crystal`+`core`; no symmetry expansion, so the CIF must list every atom in the cell)
 - [x] Supercell and slab builders (`tpt-chem-crystal/src/build.rs`)
 
 **I/O (`tpt-chem-io`)**
@@ -492,7 +492,15 @@ usability/automation, and adoption work. Ordered roughly by priority.*
 - [ ] Published validation/benchmark table (reference energies, energy-drift
       plots)
 - [x] Run manifest (versions, seed, params) written alongside every output: `tpt_chemistry::manifest::RunManifest` (JSON with crate versions, enabled features, seed, params, inputs, FNV-1a output hashes; no timestamp so reruns match). The `tpt-chem` CLI writes `<out>.manifest.json` for `hf --opt --out` and `md --out`. The `water_hf` and `water_cube` examples also write manifests. Only those two examples write files, so the rest need none. The CLI xrd and kinetics commands print to stdout and write no file
-- [ ] Optional `rayon` feature for ERI shell quartets and force loops
+- [x] Optional `rayon` feature for ERI shell quartets and force loops. The
+      `rayon` feature (opt-in; forwarded by the umbrella) parallelizes the MD
+      pair loops (`forces_all_pairs`, `forces_neighbor_list`), the quartet
+      integral evaluation in RHF `scf_setup`, and the Fock build (`accumulate_g`).
+      Measured on benzene RHF/STO-3G (36 basis functions, release, one run
+      each): serial 122.0 s, rayon 39.0 s (about 3.1×), same energy
+      −227.89100277 Eh. An earlier Fock-only parallel build was slower (about
+      140 s vs 118 s) because the integrals dominated; parallelizing the
+      integrals is what made the difference
 
 ### 5.4 Usability & automation
 
@@ -527,10 +535,10 @@ usability/automation, and adoption work. Ordered roughly by priority.*
       an XYZ and runs a job. Partly done: `examples/xyz_energy.rs` reads an
       XYZ and runs RHF/STO-3G, meant to be copied as a starting point. The
       `cargo generate` template is still open
-- [ ] `data/` folder of sample structures (water, benzene, argon box, NaCl,
-      silicon in XYZ/PDB/CIF). Partly done: `data/` has idealized water,
-      benzene and NaCl in XYZ, parsed by `tpt-chem-io/tests/data_samples.rs`.
-      Still open: argon box, silicon, and PDB/CIF versions
+- [x] `data/` folder of sample structures (water, benzene, argon box, NaCl,
+      silicon). XYZ for all five; PDB for the three molecules; CIF (P1) for
+      argon and silicon, since a CIF is only meaningful for crystals. All
+      parsed and geometry-checked by `tpt-chem-io/tests/data_samples.rs`
 - [ ] mdBook tutorial: 5-minute quick start, "which crate do I need?" table,
       units cheat-sheet (Å/kJ·mol⁻¹/fs vs Bohr/Hartree), validation page
 - [ ] Jupyter notebooks (Binder/Colab) once Python bindings exist
