@@ -154,8 +154,8 @@ mod eri_proofs {
         // Nuclear attraction with the nucleus exactly at the electron
         // center: the Boys function at T = 0 must stay finite too.
         let nuc = nuclear_shell(&s, &s, &[(1.0, c)]);
-        kani::assert(nuc[0][0][0].is_finite(), "finite attraction at the cusp");
-        kani::assert(nuc[0][0][0] < 0.0, "attraction is negative");
+        kani::assert(nuc[0][0].is_finite(), "finite attraction at the cusp");
+        kani::assert(nuc[0][0] < 0.0, "attraction is negative");
     }
 
     /// Proof: p-shell self-ERI and kinetic evaluation at coincident centers
@@ -171,14 +171,11 @@ mod eri_proofs {
         let mut p = Shell::new(1, c, vec![(alpha, 1.0)]);
         p.normalize();
         let v = eri_shell(&p, &p, &p, &p);
-        for (i, row) in v.iter().enumerate() {
-            for (j, r2) in row.iter().enumerate() {
-                for (k, r3) in r2.iter().enumerate() {
-                    for (l, &val) in r3.iter().enumerate() {
-                        kani::assert(
-                            val.is_finite(),
-                            "finite (pp|pp) element at [{i}][{j}][{k}][{l}]",
-                        );
+        for row in v.iter() {
+            for r2 in row.iter() {
+                for r3 in r2.iter() {
+                    for &val in r3.iter() {
+                        kani::assert(val.is_finite(), "finite (pp|pp) element");
                     }
                 }
             }
