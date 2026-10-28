@@ -57,6 +57,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --workspace
         working-directory: tpt-chemistry
+      - run: cargo doc --workspace --no-deps --all-features
+        working-directory: tpt-chemistry
+        env:
+          RUSTDOCFLAGS: -D warnings
 
   deny:
     runs-on: ubuntu-latest
