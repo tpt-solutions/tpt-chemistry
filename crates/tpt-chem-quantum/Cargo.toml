@@ -1,8 +1,9 @@
 [package]
 name = "tpt-chem-quantum"
 description = "Electronic structure: Gaussian basis sets, McMurchie-Davidson integrals, SCF / Hartree-Fock"
-keywords = ["quantum-chemistry", "hartree-fock", "scf", "basis-set"]
-categories = ["science"]
+keywords = ["quantum-chemistry", "hartree-fock", "scf", "basis-set", "gaussian-basis"]
+categories = ["science::computational-chemistry::electronic-structure"]
+readme = "README.md"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true

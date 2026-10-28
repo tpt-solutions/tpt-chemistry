@@ -1,8 +1,9 @@
 [package]
 name = "tpt-chem-verify"
 description = "Verification harnesses: proptest strategies, conservation-law checks, Kani proofs"
-keywords = ["verification", "property-testing", "kani", "proptest"]
-categories = ["science", "development-tools::testing"]
+keywords = ["verification", "property-testing", "kani", "proptest", "conservation-laws"]
+categories = ["development-tools::testing", "science::computational-chemistry"]
+readme = "README.md"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true

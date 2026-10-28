@@ -1,8 +1,9 @@
 [package]
 name = "tpt-chem-core"
 description = "Foundation layer: molecular graphs, force fields, physical constants, unit-safe types"
-keywords = ["chemistry", "molecular-dynamics", "force-fields", "no-std"]
-categories = ["science"]
+keywords = ["chemistry", "molecular-graph", "force-fields", "no-std", "physical-constants"]
+categories = ["science::computational-chemistry", "no-std"]
+readme = "README.md"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true

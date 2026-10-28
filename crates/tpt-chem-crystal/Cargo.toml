@@ -1,8 +1,9 @@
 [package]
 name = "tpt-chem-crystal"
 description = "Solid state: Bravais lattices, space groups, reciprocal space, k-point grids, XRD simulation"
-keywords = ["crystallography", "solid-state", "xrd", "bravais"]
-categories = ["science"]
+keywords = ["crystallography", "solid-state", "xrd", "bravais", "space-group"]
+categories = ["science::materials"]
+readme = "README.md"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true

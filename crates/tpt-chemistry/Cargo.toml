@@ -1,8 +1,9 @@
 [package]
 name = "tpt-chemistry"
 description = "Umbrella crate: pure-Rust computational chemistry — MD, quantum, kinetics, crystallography"
-keywords = ["chemistry", "molecular-dynamics", "quantum-chemistry", "simulation"]
-categories = ["science"]
+keywords = ["chemistry", "molecular-dynamics", "quantum-chemistry", "crystallography", "simulation"]
+categories = ["science::computational-chemistry", "simulation"]
+readme = "README.md"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true

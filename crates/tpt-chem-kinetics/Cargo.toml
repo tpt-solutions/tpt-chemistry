@@ -1,8 +1,9 @@
 [package]
 name = "tpt-chem-kinetics"
 description = "Reaction kinetics: mass-action ODEs, Gillespie SSA, Arrhenius and Eyring rate laws"
-keywords = ["chemistry", "kinetics", "gillespie", "reaction-network"]
-categories = ["science"]
+keywords = ["chemical-kinetics", "gillespie", "reaction-network", "arrhenius", "ode"]
+categories = ["science::computational-chemistry", "simulation"]
+readme = "README.md"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true

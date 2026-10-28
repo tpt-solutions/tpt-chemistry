@@ -1,8 +1,9 @@
 [package]
 name = "tpt-chem-md"
 description = "Classical molecular dynamics: integrators, thermostats, neighbor lists, Ewald/PME electrostatics"
-keywords = ["molecular-dynamics", "chemistry", "simulation", "ewald"]
-categories = ["science"]
+keywords = ["molecular-dynamics", "chemistry", "simulation", "ewald", "pme"]
+categories = ["science::computational-chemistry::molecular-simulation", "simulation"]
+readme = "README.md"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
