@@ -218,3 +218,141 @@ mod tests {
         assert_eq!(sys.temperature(), 0.0);
     }
 }
+
+/// Errors from [`SystemBuilder::build`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SystemError {
+    /// A topology or exclusion term refers to an atom that does not exist.
+    IndexOutOfRange {
+        /// The offending atom index.
+        index: usize,
+        /// Number of atoms in the system.
+        n_atoms: usize,
+    },
+}
+
+impl std::fmt::Display for SystemError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SystemError::IndexOutOfRange { index, n_atoms } => {
+                write!(f, "atom index {index} out of range for {n_atoms} atoms")
+            }
+        }
+    }
+}
+
+impl std::error::Error for SystemError {}
+
+impl System {
+    /// Starts a [`SystemBuilder`].
+    pub fn builder() -> SystemBuilder {
+        SystemBuilder::default()
+    }
+}
+
+/// Fluent constructor for [`System`].
+///
+/// Each atom is added with its name, position, mass, charge and LJ
+/// parameters. [`build`](Self::build) checks every topology and exclusion
+/// index, and it can draw initial velocities from a seeded RNG, removing
+/// centre-of-mass drift as it does so.
+///
+/// # Examples
+///
+/// ```
+/// use tpt_chem_core::forcefield::LennardJones;
+/// use tpt_chem_core::vec3::Vec3;
+/// use tpt_chem_md::system::System;
+///
+/// let lj = LennardJones { sigma: 3.4, epsilon: 0.4 };
+/// let sys = System::builder()
+///     .atom("Ar", Vec3::new(0.0, 0.0, 0.0), 39.95, 0.0, lj)
+///     .atom("Ar", Vec3::new(3.8, 0.0, 0.0), 39.95, 0.0, lj)
+///     .thermal_velocities(120.0, 7)
+///     .build()
+///     .unwrap();
+/// assert_eq!(sys.len(), 2);
+/// ```
+#[derive(Debug, Clone, Default)]
+pub struct SystemBuilder {
+    sys: System,
+    thermal: Option<(f64, u64)>,
+}
+
+impl SystemBuilder {
+    /// Adds an atom. `mass` is in amu, `charge` in e, positions in Å.
+    #[must_use]
+    pub fn atom(mut self, name: &str, pos: Vec3, mass: f64, charge: f64, lj: LennardJones) -> Self {
+        let idx = self.sys.add_atom(lj, charge, mass, pos);
+        self.sys.names[idx] = name.to_string();
+        self
+    }
+
+    /// Sets the periodic box.
+    #[must_use]
+    pub fn periodic(mut self, box_: Box3) -> Self {
+        self.sys.set_box(box_);
+        self
+    }
+
+    /// Sets the bonded topology.
+    #[must_use]
+    pub fn bonded(mut self, bonded: crate::bonded::Bonded) -> Self {
+        self.sys.bonded = Some(bonded);
+        self
+    }
+
+    /// Sets the nonbonded exclusion and 1-4 scaling table.
+    #[must_use]
+    pub fn exclusions(mut self, exclusions: crate::exclusions::Exclusions) -> Self {
+        self.sys.exclusions = Some(exclusions);
+        self
+    }
+
+    /// Draws Maxwell–Boltzmann velocities at `temperature` (K) from a
+    /// generator seeded with `seed`, then removes centre-of-mass motion.
+    #[must_use]
+    pub fn thermal_velocities(mut self, temperature: f64, seed: u64) -> Self {
+        self.thermal = Some((temperature, seed));
+        self
+    }
+
+    /// Finishes the system.
+    ///
+    /// # Errors
+    /// [`SystemError::IndexOutOfRange`] if a bonded or exclusion term names
+    /// an atom that was not added.
+    pub fn build(mut self) -> Result<System, SystemError> {
+        let n_atoms = self.sys.len();
+        let check = |index: usize| {
+            if index < n_atoms {
+                Ok(())
+            } else {
+                Err(SystemError::IndexOutOfRange { index, n_atoms })
+            }
+        };
+        if let Some(bonded) = &self.sys.bonded {
+            for (ids, _) in &bonded.bonds {
+                ids.iter().try_for_each(|&i| check(i))?;
+            }
+            for (ids, _) in &bonded.angles {
+                ids.iter().try_for_each(|&i| check(i))?;
+            }
+            for (ids, _) in &bonded.dihedrals {
+                ids.iter().try_for_each(|&i| check(i))?;
+            }
+        }
+        if let Some(exclusions) = &self.sys.exclusions {
+            for (a, b, _) in exclusions.iter() {
+                check(a)?;
+                check(b)?;
+            }
+        }
+        if let Some((temperature, seed)) = self.thermal {
+            let mut rng = Rng::new(seed);
+            self.sys.init_velocities(temperature, &mut rng);
+            self.sys.remove_com_motion();
+        }
+        Ok(self.sys)
+    }
+}

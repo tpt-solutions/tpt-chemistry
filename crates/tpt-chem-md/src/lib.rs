@@ -68,3 +68,16 @@ pub const KJ_MOL_PER_MDU: f64 = 1.0e4;
 /// Conversion factor: acceleration in Å·fs⁻² from
 /// force/mass in kJ·mol⁻¹·Å⁻¹·amu⁻¹ (`= 10³·10¹⁰/(N_A·amu·10²⁰)`).
 pub const ACC_PER_FORCE_OVER_MASS: f64 = 1.0e-4;
+
+/// Common imports for running MD: system construction, topology,
+/// integrators and force models.
+pub mod prelude {
+    pub use crate::bonded::Bonded;
+    pub use crate::box3::Box3;
+    pub use crate::exclusions::{Exclusions, PairScale};
+    pub use crate::forces::ForceModel;
+    pub use crate::integrator::VelocityVerlet;
+    pub use crate::system::{System, SystemBuilder, SystemError};
+    pub use tpt_chem_core::forcefield::LennardJones;
+    pub use tpt_chem_core::vec3::Vec3;
+}
