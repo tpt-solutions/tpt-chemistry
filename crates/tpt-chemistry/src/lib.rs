@@ -29,14 +29,14 @@
 //! # }
 //! ```
 
+#[cfg(feature = "aqueous")]
+pub use tpt_chem_aqueous;
 #[cfg(feature = "core")]
 pub use tpt_chem_core;
 #[cfg(feature = "crystal")]
 pub use tpt_chem_crystal;
 #[cfg(feature = "io")]
 pub use tpt_chem_io;
-#[cfg(feature = "aqueous")]
-pub use tpt_chem_aqueous;
 #[cfg(feature = "kinetics")]
 pub use tpt_chem_kinetics;
 #[cfg(feature = "md")]
@@ -46,6 +46,8 @@ pub use tpt_chem_quantum;
 #[cfg(feature = "verify")]
 pub use tpt_chem_verify;
 
+#[cfg(feature = "aqueous")]
+pub use tpt_chem_aqueous as aqueous;
 /// Short aliases for the constituent crates (`tpt_chemistry::md`, …).
 #[cfg(feature = "core")]
 pub use tpt_chem_core as core;
@@ -53,8 +55,6 @@ pub use tpt_chem_core as core;
 pub use tpt_chem_crystal as crystal;
 #[cfg(feature = "io")]
 pub use tpt_chem_io as io;
-#[cfg(feature = "aqueous")]
-pub use tpt_chem_aqueous as aqueous;
 #[cfg(feature = "kinetics")]
 pub use tpt_chem_kinetics as kinetics;
 #[cfg(feature = "md")]
@@ -64,7 +64,10 @@ pub use tpt_chem_quantum as quantum;
 #[cfg(feature = "verify")]
 pub use tpt_chem_verify as verify;
 
-/// Re-exports of the most-used types (behind the `core` feature).
+/// Run manifests: provenance JSON written alongside outputs.
+pub mod manifest;
+
+/// Common imports from `tpt-chem-core` (requires the `core` feature).
 #[cfg(feature = "core")]
 pub mod prelude {
     pub use tpt_chem_core::prelude::*;

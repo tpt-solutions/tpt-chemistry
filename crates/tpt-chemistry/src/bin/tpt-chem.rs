@@ -20,6 +20,7 @@ use tpt_chemistry::crystal::xrd::{CrystalStructure, XrdSimulator};
 use tpt_chemistry::io::cif::parse_cif;
 use tpt_chemistry::io::xyz::{parse_xyz, write_xyz};
 use tpt_chemistry::kinetics::{network::ReactionNetwork, solver};
+use tpt_chemistry::manifest::RunManifest;
 use tpt_chemistry::md::forces::ForceModel;
 use tpt_chemistry::md::integrator::VelocityVerlet;
 use tpt_chemistry::md::minimiser::minimise;
@@ -37,7 +38,8 @@ const USAGE: &str = "usage:
   tpt-chem md  water <n_per_axis> [--model tip3p|spc] [--steps N] [--temp K]
   tpt-chem md  <file.xyz> [--steps N] [--dt FS] [--temp K] [--minimise] [--out traj.xyz]
   tpt-chem kinetics <network.txt> [--ssa] [--seed N] [--points N]
-Energies are RHF/UHF STO-3G (Hartree); gradients in Hartree/Bohr; XRD for Cu K-alpha.";
+Energies are RHF/UHF STO-3G (Hartree); gradients in Hartree/Bohr; XRD for Cu K-alpha.
+--out also writes <out>.manifest.json (inputs, parameters, output hash).";
 
 struct Args {
     rest: Vec<String>,
@@ -126,11 +128,13 @@ fn cmd_hf(mut a: Args) -> Result<(), String> {
         );
         mol = r.molecule;
         if let Some(o) = &out {
-            std::fs::write(
-                o,
-                write_xyz(&mol, &format!("optimised by tpt-chem (RHF/{label})")),
-            )
-            .map_err(|e| format!("{o}: {e}"))?;
+            let xyz = write_xyz(&mol, &format!("optimised by tpt-chem (RHF/{label})"));
+            let manifest = RunManifest::new("tpt-chem hf --opt", env!("CARGO_PKG_VERSION"))
+                .param("charge", charge)
+                .param("multiplicity", mult)
+                .param("basis", label)
+                .input(&path);
+            write_output_with_manifest(o, &xyz, manifest)?;
             println!("wrote {o}");
         } else {
             print!(
@@ -188,6 +192,24 @@ fn cmd_xrd(mut a: Args) -> Result<(), String> {
             p.two_theta, p.d, p.intensity, p.miller.h, p.miller.k, p.miller.l
         );
     }
+    Ok(())
+}
+
+/// Writes `contents` to `path` and a manifest next to it.
+///
+/// The manifest records the output's hash, so the manifest is complete only
+/// after the file has been written.
+fn write_output_with_manifest(
+    path: &str,
+    contents: &str,
+    manifest: RunManifest,
+) -> Result<(), String> {
+    std::fs::write(path, contents).map_err(|e| format!("{path}: {e}"))?;
+    let manifest = manifest.output_bytes(path, contents.as_bytes());
+    let written = manifest
+        .write_alongside(std::path::Path::new(path))
+        .map_err(|e| format!("{path}: manifest: {e}"))?;
+    println!("# wrote manifest {}", written.display());
     Ok(())
 }
 
@@ -295,7 +317,14 @@ fn cmd_md(mut a: Args) -> Result<(), String> {
         }
     }
     if let Some(o) = out {
-        std::fs::write(&o, traj).map_err(|e| format!("{o}: {e}"))?;
+        let manifest = RunManifest::new("tpt-chem md", env!("CARGO_PKG_VERSION"))
+            .seed(1) // velocities are drawn from Rng::new(1)
+            .param("steps", steps)
+            .param("temperature_k", temp)
+            .param("dt_fs", dt)
+            .param("minimise", do_min)
+            .input(&first);
+        write_output_with_manifest(&o, &traj, manifest)?;
         println!("# wrote trajectory {o}");
     }
     Ok(())

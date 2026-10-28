@@ -4,9 +4,11 @@
 //! Run: `cargo run -p tpt-chemistry --features quantum --example water_hf`
 
 fn main() {
+    use std::path::Path;
     use tpt_chemistry::core::molecule::Molecule;
     use tpt_chemistry::core::units::angstrom_to_bohr;
     use tpt_chemistry::core::vec3::Vec3;
+    use tpt_chemistry::manifest::RunManifest;
     use tpt_chemistry::quantum::basis::sto3g_basis;
     use tpt_chemistry::quantum::hf::rhf;
     use tpt_chemistry::quantum::molden::write_molden;
@@ -46,5 +48,12 @@ fn main() {
     let molden = write_molden(&water, &shells, &res);
     let out = "water_sto3g.molden";
     std::fs::write(out, &molden).expect("write molden file");
+    RunManifest::new("water_hf", env!("CARGO_PKG_VERSION"))
+        .param("r_oh_angstrom", r)
+        .param("hoh_angle_deg", 100.025)
+        .param("basis", "STO-3G")
+        .output_bytes(out, molden.as_bytes())
+        .write_alongside(Path::new(out))
+        .expect("write manifest");
     println!("\nwrote orbital file: {out} ({} bytes)", molden.len());
 }
