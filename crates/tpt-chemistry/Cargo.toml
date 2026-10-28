@@ -23,6 +23,8 @@ serde = ["tpt-chem-core?/serde", "tpt-chem-quantum?/serde", "tpt-chem-md?/serde"
 aqueous = ["dep:tpt-chem-aqueous"]
 crystal = ["dep:tpt-chem-crystal"]
 verify = ["dep:tpt-chem-verify"]
+# Parallel MD force loops and Fock build (forwarded to tpt-chem-md and tpt-chem-quantum).
+rayon = ["tpt-chem-md?/rayon", "tpt-chem-quantum?/rayon"]
 
 [dependencies]
 tpt-chem-core = { workspace = true, optional = true }
