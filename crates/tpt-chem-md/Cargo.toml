@@ -15,6 +15,8 @@ repository.workspace = true
 [features]
 # Serialize MD state and topology types (forwards to tpt-chem-core/serde).
 serde = ["dep:serde", "tpt-chem-core/serde"]
+# Parallel force loops over pairs and neighbor lists (rayon).
+rayon = ["dep:rayon"]
 
 [dev-dependencies]
 serde_json = { version = "1", features = ["float_roundtrip"] }
@@ -25,6 +27,7 @@ tpt-chem-core = { workspace = true }
 # 1D FFTs composed into 3D transforms for Particle Mesh Ewald (stands in for
 # the never-created `tpt-dsp`, see workspace Cargo.toml note).
 tpt-math-signal-fft = { workspace = true }
+rayon = { workspace = true, optional = true }
 
 [lints]
 workspace = true

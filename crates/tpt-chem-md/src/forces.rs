@@ -76,43 +76,118 @@ fn coulomb_exclusion_correction(sys: &System) -> (Vec<Vec3>, f64, f64) {
     (forces, energy, w)
 }
 
+/// One pair's contribution: `(energy, fvec)` where `fvec` is the force on
+/// `b` (the force on `a` is its negative). `None` outside the cutoff.
+#[inline]
+fn pair_term(
+    sys: &System,
+    box_: Option<Box3>,
+    cut2: f64,
+    a: usize,
+    b: usize,
+) -> Option<(f64, Vec3)> {
+    let raw = sys.pos[b] - sys.pos[a];
+    let d = match box_ {
+        Some(bx) => bx.min_image(raw),
+        None => raw,
+    };
+    let r2 = d.norm_sq();
+    if r2 >= cut2 || r2 < 1e-12 {
+        return None;
+    }
+    let r = r2.sqrt();
+    let (e, fmag) = pair_energy_force(sys, a, b, r, r2);
+    // fmag > 0 (repulsion) pushes a away from b, i.e. along -d̂.
+    Some((e, d * (fmag / r)))
+}
+
+/// Per-atom forces and total energy accumulated over pairs. Also the unit
+/// that parallel workers fold into and then merge.
+struct PairSum {
+    forces: Vec<Vec3>,
+    energy: f64,
+}
+
+impl PairSum {
+    fn zeros(n: usize) -> Self {
+        PairSum {
+            forces: vec![Vec3::ZERO; n],
+            energy: 0.0,
+        }
+    }
+
+    #[inline]
+    fn add(&mut self, a: usize, b: usize, term: Option<(f64, Vec3)>) {
+        if let Some((e, fvec)) = term {
+            self.energy += e;
+            self.forces[a] -= fvec;
+            self.forces[b] += fvec;
+        }
+    }
+
+    #[cfg(feature = "rayon")]
+    fn merge(mut self, other: PairSum) -> PairSum {
+        for (f, o) in self.forces.iter_mut().zip(other.forces) {
+            *f += o;
+        }
+        self.energy += other.energy;
+        self
+    }
+}
+
+/// Serial all-pairs accumulation: the default path, and the reference that
+/// the parallel path is tested against.
+#[cfg(any(not(feature = "rayon"), test))]
+fn all_pairs_serial(sys: &System, box_: Option<Box3>, cut2: f64) -> PairSum {
+    let n = sys.len();
+    let mut acc = PairSum::zeros(n);
+    for a in 0..n {
+        for b in (a + 1)..n {
+            acc.add(a, b, pair_term(sys, box_, cut2, a, b));
+        }
+    }
+    acc
+}
+
 /// Energy and forces for a full O(N²) all-pairs evaluation.
 ///
 /// `cutoff` (`None` = no truncation) applies plain truncation — the
 /// reported potential energy uses exactly the same truncated pair set as
 /// the forces, so NVE energy conservation is preserved.
 ///
+/// With the `rayon` feature, rows are evaluated in parallel; the result
+/// matches the serial path up to floating-point summation order.
+///
 /// Returns `(forces, potential_energy)`.
 pub fn forces_all_pairs(sys: &System, box_: Option<Box3>, cutoff: Option<f64>) -> (Vec<Vec3>, f64) {
-    let n = sys.len();
-    let mut forces = vec![Vec3::ZERO; n];
-    let mut energy = 0.0;
-    for a in 0..n {
-        for b in (a + 1)..n {
-            let raw = sys.pos[b] - sys.pos[a];
-            let d = match box_ {
-                Some(bx) => bx.min_image(raw),
-                None => raw,
-            };
-            let r2 = d.norm_sq();
-            let cut = cutoff.unwrap_or(f64::INFINITY);
-            if r2 >= cut * cut || r2 < 1e-12 {
-                continue;
-            }
-            let r = r2.sqrt();
-            let (e, fmag) = pair_energy_force(sys, a, b, r, r2);
-            energy += e;
-            // fmag > 0 (repulsion) pushes a away from b, i.e. along -d̂.
-            let fvec = d * (fmag / r);
-            forces[a] -= fvec;
-            forces[b] += fvec;
-        }
-    }
-    (forces, energy)
+    let cut2 = cutoff.map_or(f64::INFINITY, |c| c * c);
+    #[cfg(feature = "rayon")]
+    let acc = {
+        use rayon::prelude::*;
+        let n = sys.len();
+        (0..n)
+            .into_par_iter()
+            .fold(
+                || PairSum::zeros(n),
+                |mut acc, a| {
+                    for b in (a + 1)..n {
+                        acc.add(a, b, pair_term(sys, box_, cut2, a, b));
+                    }
+                    acc
+                },
+            )
+            .reduce(|| PairSum::zeros(n), PairSum::merge)
+    };
+    #[cfg(not(feature = "rayon"))]
+    let acc = all_pairs_serial(sys, box_, cut2);
+    (acc.forces, acc.energy)
 }
 
 /// Energy and forces using a Verlet neighbor list (pairs within
 /// `cutoff + skin`, truncated at `cutoff`).
+///
+/// With the `rayon` feature, pairs are evaluated in parallel chunks; the
+/// result matches the serial path up to floating-point summation order.
 ///
 /// Returns `(forces, potential_energy)`.
 pub fn forces_neighbor_list(
@@ -121,28 +196,38 @@ pub fn forces_neighbor_list(
     neighbors: &VerletList,
 ) -> (Vec<Vec3>, f64) {
     let n = sys.len();
-    let mut forces = vec![Vec3::ZERO; n];
-    let mut energy = 0.0;
     let cut2 = neighbors.cutoff * neighbors.cutoff;
-    for &(a, b) in &neighbors.pairs {
-        let raw = sys.pos[b] - sys.pos[a];
-        let d = match box_ {
-            Some(bx) => bx.min_image(raw),
-            None => raw,
-        };
-        let r2 = d.norm_sq();
-        if r2 >= cut2 || r2 < 1e-12 {
-            continue;
+    #[cfg(feature = "rayon")]
+    let acc = {
+        use rayon::prelude::*;
+        neighbors
+            .pairs
+            .par_chunks(NEIGHBOR_CHUNK)
+            .fold(
+                || PairSum::zeros(n),
+                |mut acc, chunk| {
+                    for &(a, b) in chunk {
+                        acc.add(a, b, pair_term(sys, box_, cut2, a, b));
+                    }
+                    acc
+                },
+            )
+            .reduce(|| PairSum::zeros(n), PairSum::merge)
+    };
+    #[cfg(not(feature = "rayon"))]
+    let acc = {
+        let mut acc = PairSum::zeros(n);
+        for &(a, b) in &neighbors.pairs {
+            acc.add(a, b, pair_term(sys, box_, cut2, a, b));
         }
-        let r = r2.sqrt();
-        let (e, fmag) = pair_energy_force(sys, a, b, r, r2);
-        energy += e;
-        let fvec = d * (fmag / r);
-        forces[a] -= fvec;
-        forces[b] += fvec;
-    }
-    (forces, energy)
+        acc
+    };
+    (acc.forces, acc.energy)
 }
+
+/// Pairs per rayon work item for the neighbor-list evaluator.
+#[cfg(feature = "rayon")]
+const NEIGHBOR_CHUNK: usize = 1024;
 
 #[cfg(test)]
 mod tests {
@@ -742,6 +827,50 @@ mod exclusion_tests {
         assert!((ee - ep).abs() < 0.02 * ee.abs().max(1.0), "{ee} vs {ep}");
         for (a, b) in fe.iter().zip(&fp) {
             assert!((*a - *b).norm() < 0.5, "{a:?} vs {b:?}");
+        }
+    }
+}
+
+#[cfg(test)]
+mod evaluator_tests {
+    use super::*;
+    use tpt_chem_core::forcefield::LennardJones;
+
+    /// A 4×4×4 jittered grid of charged LJ atoms (deterministic, no RNG).
+    fn jittered_grid() -> System {
+        let mut sys = System::new();
+        let lj = LennardJones {
+            sigma: 3.2,
+            epsilon: 0.6,
+        };
+        for i in 0..4 {
+            for j in 0..4 {
+                for k in 0..4 {
+                    let q = if (i + j + k) % 2 == 0 { 0.4 } else { -0.4 };
+                    let jitter = 0.07 * ((i * 7 + j * 3 + k * 5) % 11) as f64 / 11.0;
+                    let pos = Vec3::new(
+                        i as f64 * 3.5 + jitter,
+                        j as f64 * 3.5 - jitter,
+                        k as f64 * 3.5 + 0.5 * jitter,
+                    );
+                    sys.add_atom(lj, q, 39.95, pos);
+                }
+            }
+        }
+        sys
+    }
+
+    #[test]
+    fn all_pairs_matches_serial_reference() {
+        let sys = jittered_grid();
+        for cutoff in [None, Some(7.0)] {
+            let cut2 = cutoff.map_or(f64::INFINITY, |c| c * c);
+            let reference = all_pairs_serial(&sys, None, cut2);
+            let (forces, energy) = forces_all_pairs(&sys, None, cutoff);
+            assert!((energy - reference.energy).abs() < 1e-9 * (1.0 + energy.abs()));
+            for (f, r) in forces.iter().zip(&reference.forces) {
+                assert!((*f - *r).norm() < 1e-9 * (1.0 + r.norm()));
+            }
         }
     }
 }

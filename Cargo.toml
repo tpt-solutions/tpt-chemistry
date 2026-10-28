@@ -46,6 +46,7 @@ tpt-math-signal-fft = { version = "0.1.0", path = "../tpt-math/crates/tpt-math-s
 # per spec.txt §2 and the workspace `deny.toml`).
 libm = "0.2"
 proptest = "1.7"
+rayon = "1.10"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "warn"
