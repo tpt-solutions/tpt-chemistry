@@ -474,8 +474,8 @@ impl NucleationKinetics {
 
     /// Natural log of the nucleation rate at saturation index `si`.
     ///
-    /// Returns [`LN_RATE_FLOOR`](Self::LN_RATE_FLOOR) for `si ≤ 0`, where the
-    /// rate is effectively zero.
+    /// Returns a floor of −1000 for `si ≤ 0`, where the rate is effectively
+    /// zero.
     pub fn ln_nucleation_rate(&self, si: f64) -> f64 {
         let ln_s = si * LN10;
         if ln_s <= 0.0 || !ln_s.is_finite() {
