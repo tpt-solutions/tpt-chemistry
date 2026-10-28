@@ -15,6 +15,8 @@ repository.workspace = true
 [features]
 # Serialize result types (forwards to tpt-chem-core/serde).
 serde = ["dep:serde", "tpt-chem-core/serde"]
+# Parallel Fock-matrix build over shell quartets (rayon).
+rayon = ["dep:rayon"]
 
 [dev-dependencies]
 serde_json = { version = "1", features = ["float_roundtrip"] }
@@ -22,6 +24,7 @@ serde_json = { version = "1", features = ["float_roundtrip"] }
 [dependencies]
 serde = { version = "1", default-features = false, features = ["derive"], optional = true }
 tpt-chem-core = { workspace = true }
+rayon = { workspace = true, optional = true }
 # NOTE: spec.txt §4 says HF "relies on tpt-math for dense eigenvalue
 # decomposition", but `tpt-math-linalg-dense` exposes no eigensolver and
 # `nalgebra` is Apache-2.0-only (banned by the workspace license policy).

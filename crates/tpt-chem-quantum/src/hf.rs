@@ -103,9 +103,49 @@ pub(crate) struct PackedQuartet {
     pub(crate) v: Vec<f64>,
 }
 
+/// Pack-quartets per rayon work item in [`accumulate_g`].
+#[cfg(feature = "rayon")]
+const QUARTET_CHUNK: usize = 64;
+
+/// Add one quartet's contribution to `G = Σ_{λσ} D_{λσ}[(μν|λσ) − ½(μλ|νσ)]`.
+fn accumulate_quartet(
+    g: &mut [f64],
+    density: &[f64],
+    q: &PackedQuartet,
+    offsets: &[usize],
+    nb: usize,
+) {
+    let [a, b, c, d] = q.shells;
+    let [na, nb2, nc, nd] = q.dims;
+    let (oi, oj, ok, ol) = (offsets[a], offsets[b], offsets[c], offsets[d]);
+    let mut idx = 0;
+    #[allow(clippy::needless_range_loop)]
+    for ia in 0..na {
+        for ib in 0..nb2 {
+            for ic in 0..nc {
+                for id in 0..nd {
+                    let val = q.v[idx];
+                    idx += 1;
+                    let (i, j) = (oi + ia, oj + ib);
+                    let (k, l) = (ok + ic, ol + id);
+                    // Coulomb: G_ij += D_kl (ij|kl).
+                    g[i * nb + j] += density[k * nb + l] * val;
+                    // Exchange: G_ik −= ½ D_jl (ij|kl).
+                    g[i * nb + k] -= 0.5 * density[j * nb + l] * val;
+                }
+            }
+        }
+    }
+}
+
 /// `G = Σ_{λσ} D_{λσ}[(μν|λσ) − ½(μλ|νσ)]`, accumulated directly from the
-/// packed shell quartets. Each basis-function integral `(ij|kl)` appears in
-/// exactly one quartet, so no symmetry multiplicities are needed.
+/// packed shell quartets and added into `fock`. Each basis-function integral
+/// `(ij|kl)` appears in exactly one quartet, so no symmetry multiplicities
+/// are needed.
+///
+/// With the `rayon` feature, quartets are split across workers that each
+/// build a partial `G`, and the partials are summed; the result matches the
+/// serial sum up to floating-point summation order.
 fn accumulate_g(
     fock: &mut [f64],
     density: &[f64],
@@ -113,28 +153,36 @@ fn accumulate_g(
     offsets: &[usize],
     nb: usize,
 ) {
-    for q in quartets {
-        let [a, b, c, d] = q.shells;
-        let [na, nb2, nc, nd] = q.dims;
-        let (oi, oj, ok, ol) = (offsets[a], offsets[b], offsets[c], offsets[d]);
-        let mut idx = 0;
-        #[allow(clippy::needless_range_loop)]
-        for ia in 0..na {
-            for ib in 0..nb2 {
-                for ic in 0..nc {
-                    for id in 0..nd {
-                        let val = q.v[idx];
-                        idx += 1;
-                        let (i, j) = (oi + ia, oj + ib);
-                        let (k, l) = (ok + ic, ol + id);
-                        // Coulomb: G_ij += D_kl (ij|kl).
-                        fock[i * nb + j] += density[k * nb + l] * val;
-                        // Exchange: G_ik −= ½ D_jl (ij|kl).
-                        fock[i * nb + k] -= 0.5 * density[j * nb + l] * val;
+    #[cfg(feature = "rayon")]
+    {
+        use rayon::prelude::*;
+        let g = quartets
+            .par_chunks(QUARTET_CHUNK)
+            .fold(
+                || vec![0.0f64; nb * nb],
+                |mut g, chunk| {
+                    for q in chunk {
+                        accumulate_quartet(&mut g, density, q, offsets, nb);
                     }
-                }
-            }
+                    g
+                },
+            )
+            .reduce(
+                || vec![0.0f64; nb * nb],
+                |mut x, y| {
+                    for (xi, yi) in x.iter_mut().zip(y) {
+                        *xi += yi;
+                    }
+                    x
+                },
+            );
+        for (f, gi) in fock.iter_mut().zip(g) {
+            *f += gi;
         }
+    }
+    #[cfg(not(feature = "rayon"))]
+    for q in quartets {
+        accumulate_quartet(fock, density, q, offsets, nb);
     }
 }
 
@@ -230,43 +278,56 @@ pub(crate) fn scf_setup(mol: &Molecule, basis: BasisSet) -> Result<ScfSetup, HfE
         }
     }
 
-    let mut quartets: Vec<PackedQuartet> = Vec::new();
-    for (a, oa) in shells.iter().enumerate() {
-        for (b, ob) in shells.iter().enumerate() {
+    // Screening first, so the integral evaluation below can run over the
+    // surviving quartets in any order.
+    let mut index: Vec<[usize; 4]> = Vec::new();
+    for a in 0..ns {
+        for b in 0..ns {
             if schwarz[a * ns + b] == 0.0 {
                 continue;
             }
-            for (c, oc) in shells.iter().enumerate() {
-                for (d, od) in shells.iter().enumerate() {
+            for c in 0..ns {
+                for d in 0..ns {
                     if schwarz[a * ns + b] * schwarz[c * ns + d] < SCHWARZ_THRESHOLD {
                         continue;
                     }
-                    let v = eri_shell(oa, ob, oc, od);
-                    let dims = [
-                        comps[a].len(),
-                        comps[b].len(),
-                        comps[c].len(),
-                        comps[d].len(),
-                    ];
-                    let mut flat = Vec::with_capacity(dims[0] * dims[1] * dims[2] * dims[3]);
-                    for row in &v {
-                        for r2 in row {
-                            for r3 in r2 {
-                                for x in r3 {
-                                    flat.push(*x);
-                                }
-                            }
-                        }
-                    }
-                    quartets.push(PackedQuartet {
-                        shells: [a, b, c, d],
-                        dims,
-                        v: flat,
-                    });
+                    index.push([a, b, c, d]);
                 }
             }
         }
     }
+    let pack = |&[a, b, c, d]: &[usize; 4]| {
+        let v = eri_shell(&shells[a], &shells[b], &shells[c], &shells[d]);
+        let dims = [
+            comps[a].len(),
+            comps[b].len(),
+            comps[c].len(),
+            comps[d].len(),
+        ];
+        let mut flat = Vec::with_capacity(dims[0] * dims[1] * dims[2] * dims[3]);
+        for row in &v {
+            for r2 in row {
+                for r3 in r2 {
+                    for x in r3 {
+                        flat.push(*x);
+                    }
+                }
+            }
+        }
+        PackedQuartet {
+            shells: [a, b, c, d],
+            dims,
+            v: flat,
+        }
+    };
+    // `collect` preserves the index order, so both paths build the same list.
+    #[cfg(feature = "rayon")]
+    let quartets: Vec<PackedQuartet> = {
+        use rayon::prelude::*;
+        index.par_iter().map(pack).collect()
+    };
+    #[cfg(not(feature = "rayon"))]
+    let quartets: Vec<PackedQuartet> = index.iter().map(pack).collect();
 
     // Symmetric orthogonalization X = S^{-1/2}.
     let (s_vals, s_vecs) = jacobi_eigh(&s, nb, 1e-11, 64).map_err(|_| HfError::NumericalBlowup)?;
