@@ -67,6 +67,10 @@ pub use tpt_chem_verify as verify;
 /// Run manifests: provenance JSON written alongside outputs.
 pub mod manifest;
 
+/// CIF → structure → XRD helpers (requires `io`, `crystal` and `core`).
+#[cfg(all(feature = "io", feature = "crystal", feature = "core"))]
+pub mod pipeline;
+
 /// Common imports from `tpt-chem-core` (requires the `core` feature).
 #[cfg(feature = "core")]
 pub mod prelude {
