@@ -411,7 +411,7 @@ usability/automation, and adoption work. Ordered roughly by priority.*
       validated; `*_with_basis` entry points, CLI `--basis`). Still open:
       d functions / cc-pVDZ (needs spherical-d, d-shell gradients), heavier
       elements
-- [ ] Cube output
+- [x] Cube output (`tpt-chem-quantum/src/cube.rs`: density and MO values on a grid, Gaussian `.cube` writer; density integrates to N_e and MOs to 1 in tests; `water_cube` example. Grid spacing ~0.1 Bohr is needed for the O 1s core)
 - [x] Molden orbital output (`tpt-chem-quantum/src/molden.rs`; molden
       x,y,z p-shell reordering, `[Atoms] (AU)`, occupations from the
       formal charge)
@@ -464,7 +464,7 @@ usability/automation, and adoption work. Ordered roughly by priority.*
       population halving guard; means validated against SSA)
 - [x] Next-reaction-method SSA (`solver::next_reaction[_events]`, Gibson–Bruck
       with dependency graph and putative-time rescaling; mean-decay test)
-- [ ] Parameter fitting and sensitivity analysis
+- [x] Parameter fitting and sensitivity analysis (`tpt-chem-kinetics/src/fit.rs`: `fit_rates` is Levenberg–Marquardt on ln k with RK4 integration, recovers the rates of A→B→C from noise-free data to 1e-5; `sensitivity` gives normalized ∂y/∂ln k, checked against the analytic decay result. Unweighted. `FitResult::log_std_errors` gives standard errors of ln k from the linearized covariance, and a 60-replicate test checks them against the spread of fitted values)
 
 **Crystal (`tpt-chem-crystal`)**
 - [ ] Full 230 space groups (generate from Hall symbols)
@@ -474,7 +474,8 @@ usability/automation, and adoption work. Ordered roughly by priority.*
 **I/O (`tpt-chem-io`)**
 - [x] `.gro` reader/writer (`tpt-chem-io/src/gro.rs`, nm↔Å at the API
       boundary, round-trip + fixed-column reference tests)
-- [ ] SDF, SMILES readers/writers
+- [x] SDF (V2000) reader/writer (`tpt-chem-io/src/sdf.rs`; bonds, `M  CHG` read into total charge)
+- [ ] SMILES readers/writers
 - [ ] Binary trajectories (DCD / XTC)
 
 ### 5.3 Innovation
@@ -490,7 +491,7 @@ usability/automation, and adoption work. Ordered roughly by priority.*
 - [ ] Autodiff hooks for differentiable molecular design (per README promise)
 - [ ] Published validation/benchmark table (reference energies, energy-drift
       plots)
-- [ ] Run manifest (versions, seed, params) written alongside every output
+- [x] Run manifest (versions, seed, params) written alongside every output: `tpt_chemistry::manifest::RunManifest` (JSON with crate versions, enabled features, seed, params, inputs, FNV-1a output hashes; no timestamp so reruns match). The `tpt-chem` CLI writes `<out>.manifest.json` for `hf --opt --out` and `md --out`. The `water_hf` and `water_cube` examples also write manifests. Only those two examples write files, so the rest need none. The CLI xrd and kinetics commands print to stdout and write no file
 - [ ] Optional `rayon` feature for ERI shell quartets and force loops
 
 ### 5.4 Usability & automation
@@ -500,14 +501,14 @@ usability/automation, and adoption work. Ordered roughly by priority.*
       an XYZ via the topology builder, optional minimise/trajectory), and
       `kinetics` (plain-text network → ODE or SSA CSV). TOML/JSON inputs
       left open
-- [ ] Feature-gated `serde` support for `Molecule`, `System`, result structs
-- [ ] Per-crate `prelude` modules and a `System` builder
+- [x] Feature-gated `serde` support for `Molecule`, `System`, result structs. Behind a `serde` feature (forwarded by the umbrella crate): `Molecule` (rebuilt through its constructors on load, so invalid input is an error), `Vec3`, `Atom`, `Bond`, the MD `System` with its topology and exclusions (exclusions serialize as a sorted list, so output is deterministic), and `HfResult`. Also the kinetics networks, rate laws and fit results (`fit.rs`), and crystal lattices and Bravais types. Note: serde_json needs its `float_roundtrip` feature for bit-exact f64 round trips
+- [x] Per-crate `prelude` modules and a `System` builder (`tpt_chem_md::system::SystemBuilder` validates topology and exclusion indices and can seed thermal velocities; md, quantum and kinetics have preludes; core already had one)
 - [ ] CI: criterion benchmark job with regression alerts
-- [ ] CI: `cargo doc -D warnings`, MSRV check, `cargo semver-checks`,
+- [ ] CI: `cargo doc -D warnings` (done in the test job), MSRV check, `cargo semver-checks`,
       Dependabot, `cargo llvm-cov` coverage
 - [ ] Release automation (`release-plz` / `cargo-release`) and lifting the
       "publishing out of scope" decision
-- [ ] `justfile` targets: `doc`, `examples`, `bench`
+- [x] `justfile` targets: `doc` (warnings denied), `examples` (all 11 umbrella examples, verified to exit 0), `bench` (runs nothing until the criterion job exists)
 
 ### 5.5 Adoption: examples, templates, docs
 
@@ -523,12 +524,16 @@ usability/automation, and adoption work. Ordered roughly by priority.*
   - [x] `silicon_xrd` / `nacl_xrd` (CSV pattern output)
   - [x] `cif_to_xrd` (end-to-end file I/O pipeline)
 - [ ] Starter template (`cargo generate` / GitHub template repo) that loads
-      an XYZ and runs a job
+      an XYZ and runs a job. Partly done: `examples/xyz_energy.rs` reads an
+      XYZ and runs RHF/STO-3G, meant to be copied as a starting point. The
+      `cargo generate` template is still open
 - [ ] `data/` folder of sample structures (water, benzene, argon box, NaCl,
-      silicon in XYZ/PDB/CIF)
+      silicon in XYZ/PDB/CIF). Partly done: `data/` has idealized water,
+      benzene and NaCl in XYZ, parsed by `tpt-chem-io/tests/data_samples.rs`.
+      Still open: argon box, silicon, and PDB/CIF versions
 - [ ] mdBook tutorial: 5-minute quick start, "which crate do I need?" table,
       units cheat-sheet (Å/kJ·mol⁻¹/fs vs Bohr/Hartree), validation page
 - [ ] Jupyter notebooks (Binder/Colab) once Python bindings exist
 - [ ] README upgrade: badges, status/accuracy table, feature matrix vs
       LAMMPS/PySCF/GROMACS
-- [ ] "Common mistakes" doc section (Å vs Bohr mix-ups, etc.)
+- [x] "Common mistakes" doc section (`docs/common-mistakes.md`: units by crate, Å vs Bohr, Hartree vs kJ·mol⁻¹, molality, activity pH)
