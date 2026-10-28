@@ -18,6 +18,7 @@ io = ["dep:tpt-chem-io"]
 md = ["dep:tpt-chem-md"]
 quantum = ["dep:tpt-chem-quantum"]
 kinetics = ["dep:tpt-chem-kinetics"]
+serde = ["tpt-chem-core?/serde", "tpt-chem-quantum?/serde", "tpt-chem-md?/serde", "tpt-chem-kinetics?/serde", "tpt-chem-crystal?/serde"]
 aqueous = ["dep:tpt-chem-aqueous"]
 crystal = ["dep:tpt-chem-crystal"]
 verify = ["dep:tpt-chem-verify"]
@@ -83,3 +84,11 @@ required-features = ["core", "md"]
 [[example]]
 name = "cpp_calcium_phosphate"
 required-features = ["core", "aqueous"]
+
+[[example]]
+name = "water_cube"
+required-features = ["core", "quantum"]
+
+[[example]]
+name = "xyz_energy"
+required-features = ["core", "io", "quantum"]
