@@ -527,3 +527,136 @@ mod tests {
         assert!((g[0] - limiting).abs() / limiting.abs() < 0.08);
     }
 }
+
+/// Validation against measured mean activity coefficients (25 °C).
+///
+/// The data are mean activity coefficients from the CRC Handbook of Chemistry
+/// and Physics (97th ed.), entered as numbers. They were checked against a
+/// compiled copy of the table, so see `docs/third-party.md` for provenance.
+/// Parameters are the binary Pitzer set used by the tests above (NaCl, KCl,
+/// CaCl₂), and PHREEQC's `pitzer.dat` (25 °C column) for MgCl₂.
+#[cfg(test)]
+mod crc_validation {
+    use super::*;
+
+    fn gamma_mean(model: &Pitzer, cation: &str, z: i32, anion: &str, za: i32, m: f64) -> f64 {
+        let sol = vec![
+            Species::new(cation, z, m * f64::from(za.abs())),
+            Species::new(anion, za, m * f64::from(z)),
+        ];
+        let g = model.ln_gamma(&sol, 298.15).unwrap();
+        // ν₊ and ν₋ for a 1:1 salt (1,1) or a 2:1 salt (2,1) with cation charge 2.
+        let (nu_c, nu_a) = if z.abs() == za.abs() {
+            (1.0, 1.0)
+        } else if z == 2 {
+            (1.0, 2.0)
+        } else {
+            (2.0, 1.0)
+        };
+        ((nu_c * g[0] + nu_a * g[1]) / (nu_c + nu_a)).exp()
+    }
+
+    /// Largest |predicted − measured| over the points with `m ≤ m_max`.
+    fn worst_deviation(
+        model: &Pitzer,
+        data: &[(f64, f64)],
+        salt: (&str, i32, &str, i32),
+        m_max: f64,
+    ) -> f64 {
+        data.iter()
+            .filter(|(m, _)| *m <= m_max + 1e-12)
+            .map(|&(m, measured)| {
+                let predicted = gamma_mean(model, salt.0, salt.1, salt.2, salt.3, m);
+                (predicted - measured).abs()
+            })
+            .fold(0.0, f64::max)
+    }
+
+    const NACL: [(f64, f64); 12] = [
+        (0.1, 0.778),
+        (0.2, 0.735),
+        (0.3, 0.71),
+        (0.4, 0.693),
+        (0.5, 0.681),
+        (0.6, 0.673),
+        (0.7, 0.667),
+        (0.8, 0.662),
+        (0.9, 0.659),
+        (1.0, 0.657),
+        (2.0, 0.668),
+        (5.0, 0.874),
+    ];
+    const KCL: [(f64, f64); 12] = [
+        (0.1, 0.77),
+        (0.2, 0.718),
+        (0.3, 0.688),
+        (0.4, 0.666),
+        (0.5, 0.649),
+        (0.6, 0.637),
+        (0.7, 0.626),
+        (0.8, 0.618),
+        (0.9, 0.61),
+        (1.0, 0.604),
+        (2.0, 0.573),
+        (5.0, 0.593),
+    ];
+    const CACL2: [(f64, f64); 11] = [
+        (0.1, 0.518),
+        (0.2, 0.472),
+        (0.3, 0.455),
+        (0.4, 0.448),
+        (0.5, 0.448),
+        (0.6, 0.453),
+        (0.7, 0.46),
+        (0.8, 0.47),
+        (0.9, 0.484),
+        (1.0, 0.5),
+        (2.0, 0.784),
+    ];
+    const MGCL2: [(f64, f64); 10] = [
+        (0.1, 0.529),
+        (0.2, 0.489),
+        (0.3, 0.477),
+        (0.4, 0.475),
+        (0.5, 0.481),
+        (0.6, 0.491),
+        (0.7, 0.506),
+        (0.8, 0.522),
+        (0.9, 0.544),
+        (1.0, 0.57),
+    ];
+
+    #[test]
+    fn nacl_matches_measured_series_to_5_molal() {
+        let mut model = Pitzer::new();
+        model.add_pair(PitzerPair::new("Na+", "Cl-", 0.0765, 0.2664, 0.0, 0.00127));
+        let worst = worst_deviation(&model, &NACL, ("Na+", 1, "Cl-", -1), 5.0);
+        assert!(worst < 0.005, "NaCl worst |Δγ±| = {worst:.4}");
+    }
+
+    #[test]
+    fn kcl_matches_measured_series_to_5_molal() {
+        let mut model = Pitzer::new();
+        model.add_pair(PitzerPair::new("K+", "Cl-", 0.04835, 0.2122, 0.0, -0.00084));
+        let worst = worst_deviation(&model, &KCL, ("K+", 1, "Cl-", -1), 5.0);
+        assert!(worst < 0.005, "KCl worst |Δγ±| = {worst:.4}");
+    }
+
+    #[test]
+    fn cacl2_matches_measured_series_to_1_molal() {
+        // A binary-only model is not accurate above 1 mol/kg for CaCl₂ (the
+        // 2 mol/kg point deviates by about 0.016), so the test stops at 1.
+        let mut model = Pitzer::new();
+        model.add_pair(PitzerPair::new("Ca2+", "Cl-", 0.3159, 1.614, 0.0, -0.00034));
+        let worst = worst_deviation(&model, &CACL2, ("Ca2+", 2, "Cl-", -1), 1.0);
+        assert!(worst < 0.003, "CaCl2 worst |Δγ±| = {worst:.4}");
+    }
+
+    #[test]
+    fn mgcl2_matches_measured_series_to_1_molal() {
+        let mut model = Pitzer::new();
+        model.add_pair(PitzerPair::new("Mg+2", "Cl-", 0.351, 1.65, 0.0, 0.00651));
+        let worst = worst_deviation(&model, &MGCL2, ("Mg+2", 2, "Cl-", -1), 1.0);
+        assert!(worst < 0.008, "MgCl2 worst |Δγ±| = {worst:.4}");
+    }
+}
