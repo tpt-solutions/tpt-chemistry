@@ -403,7 +403,10 @@ usability/automation, and adoption work. Ordered roughly by priority.*
 - [x] Charge inputs (`Molecule::set_formal_charge`; electron count = Σ Z − q,
       with H₂²⁺ zero-electron and H₃O⁺ ten-electron tests)
 - [x] UHF (`tpt-chem-quantum/src/uhf.rs`: separate α/β Fock, ⟨S²⟩, tests vs
-      H-atom reference, RHF singlet equivalence, H₂ triplet); ROHF left open
+      H-atom reference, RHF singlet equivalence, H₂ triplet)
+- [x] ROHF (`tpt-chem-quantum/src/rohf.rs`: one shared orbital set with Roothaan's effective
+      Fock matrix; reduces to RHF for closed shells and to UHF for one open-shell electron; tested
+      that E_ROHF ≥ E_UHF for a triplet and an OH radical. Exposed as `tpt-chem hf --rohf`)
 - [x] Analytic nuclear gradients (`tpt-chem-quantum/src/gradient.rs`:
       `rhf_gradient`, Ha/Bohr; derivative integrals via l±1 raw primitive
       shells over the existing McMurchie–Davidson code; validated against
@@ -416,10 +419,14 @@ usability/automation, and adoption work. Ordered roughly by priority.*
       validated; `*_with_basis` entry points, CLI `--basis`). cc-pVDZ for H–Ar is added (`BasisSet::CcPvdz`, data from BSE via `tools/gen_cc_pvdz.py`).
       Spherical d shells go through a Cartesian-to-spherical transform
       (`tpt-chem-quantum/src/spherical.rs`): the functions are orthonormal, and the energy is
-      rotation invariant to 1e-8. Energies only: gradients refuse spherical bases, and cube output
-      and Molden are not validated for them. Still open: d-shell gradients, Molden for spherical
-      shells, heavier
-      elements
+      rotation invariant to 1e-8. Gradients also run for spherical bases: the density is pulled
+      back to Cartesian components (`to_cartesian_space` in `gradient.rs`), checked against finite
+      differences for cc-pVDZ water. Molden writes `[5D]` for pure d shells (spherical coefficients
+      in molden order) and `[6D]` for Cartesian d; the old `[5D7F]` flag was wrong for Cartesian
+      bases. Cube output is not validated for spherical shells. 6-31G for Na–Ar is added (`BasisSet::Pople631g`,
+      data from BSE in `data/631g-na-ar.txt`, `tools/gen_631g_na_ar.py`). Its Ar atom SCF converges to
+      −526.77215 Eₕ, inside a sanity window (above the HF limit, about −526.82). No literature energy
+      has been checked against it, so it is not yet validated. Still open: elements beyond Ar
 - [x] Cube output (`tpt-chem-quantum/src/cube.rs`: density and MO values on a grid, Gaussian `.cube` writer; density integrates to N_e and MOs to 1 in tests; `water_cube` example. Grid spacing ~0.1 Bohr is needed for the O 1s core)
 - [x] Molden orbital output (`tpt-chem-quantum/src/molden.rs`; molden
       x,y,z p-shell reordering, `[Atoms] (AU)`, occupations from the
@@ -463,11 +470,13 @@ usability/automation, and adoption work. Ordered roughly by priority.*
       harmonic bonds and angles, periodic torsions including impropers, LJ and Coulomb with 1-4
       scaling, forces by autodiff). Energy and forces match OpenMM amber14 on N-methylacetamide to
       1e-3 kJ/mol (`tests/amber_openmm.rs`, fixture from `tools/amber_reference.py`). Atom types are
-      assigned by hand, and OPLS and UFF are still open. SPC and TIP3P rigid water done
+      assigned by hand. OPLS-AA is validated for n-butane (`tests/opls_openmm.rs`, parameters from
+      foyer's `oplsaa.xml`, cross-checked against GROMACS's `oplsaa.ff` for the CT and HC types).
+      Only that subset exists, and UFF is still open. SPC and TIP3P rigid water done
       (`tpt-chem-md/src/water.rs`: `water_box` wires charges, intramolecular
       exclusions and SHAKE constraints; `examples/water_pme.rs` gives
       −39.7 kJ/mol/molecule PE at 300 K with PME and ~1 kJ/mol NVE drift
-      over 500 fs in a 64-molecule box). OPLS/AMBER/UFF subsets still open
+      over 500 fs in a 64-molecule box). OPLS beyond butane and UFF subsets still open
 - [x] Topology builder (`tpt-chem-md/src/topology.rs`: `build_system` does bond
       perception, geometry-referenced bonds/angles, OPLS-like element LJ,
       exclusions + 1-4 scaling; deliberately generic — no torsions or
@@ -515,9 +524,14 @@ usability/automation, and adoption work. Ordered roughly by priority.*
 - [x] Binary trajectories, DCD: `tpt-chem-io/src/dcd.rs` reads and writes DCD files, checked in
       against OpenMM's `DCDFile` output (`tests/dcd_openmm.rs`; our writer's frame records match
       OpenMM's bytes).
-      The time step is in CHARMM AKMA units. XTC is still open: its compressed-coordinate format
-      needs a clean implementation checked against an oracle, and I did not port the LGPL
-      reference code
+      The time step is in CHARMM AKMA units. XTC is implemented in `tpt-chem-io/src/xtc.rs` (our own code, MIT OR
+      Apache-2.0). The reader and writer use molstar's bit widths (`bitlength(P)` for
+      coordinates, `smallidx` for run deltas). Compressed fixtures `ours_*` are written by our writer
+      and check exactly against formula positions; they also decode with molstar's MIT parser
+      (checked once by a port). Only gas_5 (uncompressed) comes from mdtraj (see
+      `tests/data/xtc/README.md`). Still open: a second independent compressed-stream oracle, and
+      the mdtraj compressed frames that our reader still cannot decode (an unverified cause in the
+      fixture, not the reader)
 
 ### 5.3 Innovation
 
@@ -542,7 +556,9 @@ usability/automation, and adoption work. Ordered roughly by priority.*
 - [x] Autodiff hooks for differentiable molecular design (per README promise): forward-mode dual
       numbers in the `no_std` core (`tpt-chem-core/src/autodiff.rs`). The AMBER model's forces come
       from them, and the generic Lennard-Jones gradient matches the analytic all-pairs forces to
-      1e-9 (`tpt-chem-md/tests/autodiff_forces.rs`). Reverse mode for large parameter sets is still open
+      1e-9 (`tpt-chem-md/tests/autodiff_forces.rs`). Reverse mode is in `tpt-chem-core/src/autodiff_reverse.rs` (tape-based, `std` feature only: one
+      forward and one backward pass for any number of inputs; checked against forward mode on a
+      200-input function). It is not yet wired into the AMBER/MD force path
 - [x] Independent checks against OpenMM: isolated LJ + Coulomb (relative 1e-6), periodic Ewald
       against OpenMM PME (1e-3 kJ/mol), and the AMBER model on N-methylacetamide (1e-3 kJ/mol).
       These found a bug: the Ewald heuristic was under-converged (α·r_c ≈ 1.77, about 0.6% low in
@@ -577,8 +593,9 @@ usability/automation, and adoption work. Ordered roughly by priority.*
       `proptest 1.12` needs 1.88). `cargo +1.88 check --workspace --all-targets` passes locally;
       the `msrv` job in `ci.yml` has not run on GitHub yet
 - [x] CI: Dependabot (`.github/dependabot.yml`, cargo and github-actions, weekly)
-- [ ] CI: `cargo semver-checks` (needs a published baseline, so it is part of publishing) and
-      `cargo llvm-cov` coverage
+- [ ] CI: `cargo semver-checks` (needs a published baseline, so it is part of publishing)
+- [x] CI: `cargo llvm-cov` coverage job (`coverage` in `ci.yml`; LCOV uploaded as an artifact,
+      informational only. Not yet run on GitHub, and no coverage floor set)
 - [ ] Release automation (`release-plz` / `cargo-release`) and lifting the
       "publishing out of scope" decision
 - [x] `justfile` targets: `doc` (warnings denied), `examples` (all 11 umbrella examples, verified to exit 0), `bench` (runs nothing until the criterion job exists)

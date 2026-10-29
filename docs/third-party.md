@@ -31,7 +31,10 @@ files, or provides an independent reference for a test.
 | amber14 force-field XML (distributed with OpenMM) | Parameters published by the AMBER project; the XML ships under OpenMM's MIT licence | Atom types, charges and bonded terms for the AMBER subset |
 | foyer `oplsaa.xml` (mosdef-hub/foyer, 0.7.6) | MIT | OPLS-AA parameters for the butane reference (`tools/opls_reference.py`) |
 | spglib 2.x | BSD-3-Clause | Symmetry operations for the 230 space groups (`tools/gen_spacegroups.py`) |
-| basis_set_exchange 0.12 | BSD-3-Clause | cc-pVDZ basis data for H–Ar (`tools/gen_cc_pvdz.py`) |
+| basis_set_exchange 0.12 | BSD-3-Clause | cc-pVDZ basis data for H–Ar (`tools/gen_cc_pvdz.py`). 6-31G data for Na–Ar come from the BSE REST API (`crates/tpt-chem-quantum/tools/gen_631g_na_ar.py`) |
+| GROMACS `oplsaa.ff` (`ffnonbonded.itp`, `atomtypes.atp`, at commit `aa66efd`) | LGPL-2.1 (GROMACS source); the parameter values are published OPLS-AA data | Cross-check only, for the butane atom types in `tests/data/butane_opls.json`. No file from it is in the repository |
+| molstar XTC parser (`src/mol-io/reader/xtc/parser.ts`) | MIT | Cross-check only: the compressed fixtures in `tests/data/xtc` decode exactly with its algorithm (ported once, not committed). The Rust reader is our own implementation |
+| mdtraj 1.11.2 | LGPL-2.1 | Used once to write and decode `tests/data/xtc/gas_5` (the uncompressed fixture). The compressed fixtures are now written by our own writer. mdtraj is not needed to build or test |
 | numpy | BSD-3-Clause | Reference scripts |
 | pytest | MIT | Python tests |
 | maturin | MIT or Apache-2.0 | Building the Python wheel |
