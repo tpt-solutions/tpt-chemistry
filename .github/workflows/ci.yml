@@ -82,7 +82,7 @@ jobs:
           tool: cargo-llvm-cov
       - run: cargo llvm-cov --workspace --lcov --output-path lcov.info
         working-directory: tpt-chemistry
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: lcov
           path: tpt-chemistry/lcov.info
@@ -178,7 +178,7 @@ jobs:
         run: |
           cargo bench -p tpt-chem-md --bench force_kernels -- --output-format bencher | tee bench.txt
           cargo bench -p tpt-chem-quantum --bench rhf_water -- --output-format bencher | tee -a bench.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: bench-output
           path: tpt-chemistry/bench.txt
