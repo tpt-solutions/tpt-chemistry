@@ -1,7 +1,8 @@
 //! `tpt-chem-io` — interoperability with standard chemical file formats
 //! (spec.txt §4, `tpt-chem-io`).
 //!
-//! Parsers and writers for XYZ, PDB, MOL2, SDF (V2000) and CIF, plus streaming
+//! Parsers and writers for XYZ, PDB, MOL2, SDF (V2000) and CIF, a SMILES reader,
+//! Gaussian input/output, plus streaming
 //! XYZ trajectory I/O for large MD outputs. All parsers hand-rolled — no
 //! regex, no external dependencies.
 //!
@@ -20,15 +21,20 @@
 //! ```
 
 pub mod cif;
+pub mod dcd;
 pub mod error;
+pub mod gaussian;
 pub mod gro;
 pub mod mol2;
 pub mod pdb;
 pub mod sdf;
+pub mod smiles;
 pub mod trajectory;
 pub mod xyz;
 
+pub use dcd::{DcdReader, DcdWriter};
 pub use error::{IoError, Result};
 pub use sdf::{parse_sdf, parse_sdf_all, write_sdf};
+pub use smiles::{parse_smiles, write_smiles};
 pub use trajectory::{XyzTrajectoryReader, XyzTrajectoryWriter};
 pub use xyz::{parse_xyz, parse_xyz_all, write_xyz};

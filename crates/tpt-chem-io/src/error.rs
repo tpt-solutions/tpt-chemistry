@@ -47,6 +47,13 @@ pub enum IoError {
         /// 1-based line number, when known.
         line: Option<usize>,
     },
+    /// The molecule holds something this format cannot represent.
+    Unsupported {
+        /// Which format was being written.
+        format: &'static str,
+        /// What cannot be written.
+        message: String,
+    },
     /// Wraps a `std::io` failure from file operations.
     Io(String),
 }
@@ -84,6 +91,9 @@ impl fmt::Display for IoError {
                 Some(n) => write!(f, "{format} line {n}: unknown element {symbol:?}"),
                 None => write!(f, "{format}: unknown element {symbol:?}"),
             },
+            IoError::Unsupported { format, message } => {
+                write!(f, "{format}: unsupported: {message}")
+            }
             IoError::Io(msg) => write!(f, "io error: {msg}"),
         }
     }
