@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Write OPLS-AA test molecules and OpenMM's reference values to tests/data/<name>_opls.json.
 
+Geometries are relaxed with OpenMM's local minimiser before the reference is taken.
+
 Molecules: n-butane (alkane types only) and ethanol (adds the hydroxyl O and H
 types, opls_154 and opls_155, with their C–O, O–H and torsion terms).
 
@@ -315,6 +317,9 @@ def write_molecule(name, geometry, out_dir, types_to_class, atom_params, bond_pa
 
     context = mm.Context(system, mm.VerletIntegrator(0.001), mm.Platform.getPlatformByName("Reference"))
     context.setPositions([mm.Vec3(*p) / 10.0 for p in positions])
+    # Relax the hand-placed geometry so the reference is a realistic structure.
+    mm.LocalEnergyMinimizer.minimize(context, 1e-4, 10000)
+    positions = [[c * 10.0 for c in p] for p in context.getState(getPositions=True).getPositions(asNumpy=True).value_in_unit(unit.nanometer)]
     state = context.getState(getEnergy=True, getForces=True)
     energy = state.getPotentialEnergy().value_in_unit(unit.kilojoule_per_mole)
     force = [[c / 10.0 for c in f] for f in state.getForces(asNumpy=True).value_in_unit(unit.kilojoule_per_mole / unit.nanometer)]

@@ -475,7 +475,7 @@ usability/automation, and adoption work. Ordered roughly by priority.*
       0.7.6's `oplsaa.xml`, cross-checked against GROMACS's `oplsaa.ff` for the CT and HC types. Energies
       and forces agree with OpenMM to 1e-3. The set covers alkyl, hydroxyl, ketone, ether, aromatic and
       carboxyl types. Benzene has no proper torsions, which OPLS-AA also defines as none. Geometries are
-      hand-placed and not relaxed, so energies are high and only the comparison with OpenMM is checked.
+      hand-placed and then relaxed with OpenMM's minimiser (residual forces about 1e-6 kJ/mol/Å).
       Atom types are hand-assigned, with no SMARTS typing, and UFF is still open. SPC and TIP3P rigid water done
       (`tpt-chem-md/src/water.rs`: `water_box` wires charges, intramolecular
       exclusions and SHAKE constraints; `examples/water_pme.rs` gives
