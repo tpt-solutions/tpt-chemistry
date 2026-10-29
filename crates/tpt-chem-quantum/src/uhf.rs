@@ -38,7 +38,28 @@ pub struct UhfResult {
     pub n_basis: usize,
 }
 
-fn spin_density(coeffs: &[f64], n_occ: usize, nb: usize) -> Vec<f64> {
+/// Alpha and beta electron counts for a spin multiplicity `2S + 1`.
+pub(crate) fn spin_occupations(
+    n_elec: usize,
+    multiplicity: u32,
+    nb: usize,
+) -> Result<(usize, usize), HfError> {
+    if multiplicity == 0 {
+        return Err(HfError::UnsupportedElement);
+    }
+    let unpaired = (multiplicity - 1) as usize;
+    if unpaired > n_elec || !(n_elec - unpaired).is_multiple_of(2) {
+        return Err(HfError::UnsupportedElement);
+    }
+    let n_beta = (n_elec - unpaired) / 2;
+    let n_alpha = n_beta + unpaired;
+    if n_alpha > nb {
+        return Err(HfError::UnsupportedElement);
+    }
+    Ok((n_alpha, n_beta))
+}
+
+pub(crate) fn spin_density(coeffs: &[f64], n_occ: usize, nb: usize) -> Vec<f64> {
     let mut d = vec![0.0; nb * nb];
     for i in 0..nb {
         for j in 0..nb {
@@ -51,7 +72,7 @@ fn spin_density(coeffs: &[f64], n_occ: usize, nb: usize) -> Vec<f64> {
 }
 
 /// Accumulate `J[Dt]`, `K[Da]` and `K[Db]` from the packed quartets.
-fn accumulate_jk(
+pub(crate) fn accumulate_jk(
     quartets: &[PackedQuartet],
     offsets: &[usize],
     nb: usize,
@@ -85,7 +106,7 @@ fn accumulate_jk(
     (j, ka, kb)
 }
 
-fn diag(fock: &[f64], x: &[f64], nb: usize) -> Result<(Vec<f64>, Vec<f64>), HfError> {
+pub(crate) fn diag(fock: &[f64], x: &[f64], nb: usize) -> Result<(Vec<f64>, Vec<f64>), HfError> {
     let ft = transpose(fock, nb);
     let fp = mat_mul(&mat_mul(x, &ft, nb), x, nb);
     let (eps, cp) = jacobi_eigh(&fp, nb, 1e-11, 64).map_err(|_| HfError::NumericalBlowup)?;
@@ -121,18 +142,7 @@ pub fn uhf_with_basis(
         e_nuc,
         n_elec,
     } = scf_setup(mol, basis)?;
-    if multiplicity == 0 {
-        return Err(HfError::UnsupportedElement);
-    }
-    let unpaired = (multiplicity - 1) as usize;
-    if unpaired > n_elec || !(n_elec - unpaired).is_multiple_of(2) {
-        return Err(HfError::UnsupportedElement);
-    }
-    let n_beta = (n_elec - unpaired) / 2;
-    let n_alpha = n_beta + unpaired;
-    if n_alpha > nb {
-        return Err(HfError::UnsupportedElement);
-    }
+    let (n_alpha, n_beta) = spin_occupations(n_elec, multiplicity, nb)?;
 
     let zeros = vec![0.0; nb * nb];
     let (mut da, mut db) = (zeros.clone(), zeros);

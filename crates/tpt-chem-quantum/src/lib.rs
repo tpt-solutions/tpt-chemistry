@@ -42,6 +42,7 @@ pub mod hf;
 pub mod integrals;
 pub mod linalg;
 pub mod molden;
+pub mod rohf;
 mod spherical;
 pub mod uhf;
 
