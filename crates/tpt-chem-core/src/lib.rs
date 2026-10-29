@@ -38,6 +38,7 @@
 
 extern crate alloc;
 
+pub mod autodiff;
 pub mod coords;
 pub mod element;
 pub mod forcefield;
