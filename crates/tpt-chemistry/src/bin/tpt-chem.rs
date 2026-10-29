@@ -1,7 +1,7 @@
 //! `tpt-chem` command-line front end.
 //!
 //! ```text
-//! tpt-chem hf  <file.xyz> [--charge Q] [--mult M] [--basis sto-3g|6-31g] [--grad] [--opt] [--out opt.xyz]
+//! tpt-chem hf  <file.xyz> [--charge Q] [--mult M] [--basis sto-3g|6-31g] [--rohf] [--grad] [--opt] [--out opt.xyz]
 //! tpt-chem xrd <file.cif> [--max N]
 //! tpt-chem md  water <n_per_axis> [--model tip3p|spc] [--steps N] [--temp K]
 //! tpt-chem md  <file.xyz> [--steps N] [--dt FS] [--temp K] [--minimise] [--out traj.xyz]
@@ -30,10 +30,11 @@ use tpt_chemistry::md::water::{constrained_temperature, water_box, SPC, TIP3P};
 use tpt_chemistry::quantum::basis::BasisSet;
 use tpt_chemistry::quantum::gradient::{optimize_geometry, rhf_gradient_with_basis, OptSettings};
 use tpt_chemistry::quantum::hf::rhf_with_basis;
+use tpt_chemistry::quantum::rohf::rohf_with_basis;
 use tpt_chemistry::quantum::uhf::uhf_with_basis;
 
 const USAGE: &str = "usage:
-  tpt-chem hf  <file.xyz> [--charge Q] [--mult M] [--basis sto-3g|6-31g] [--grad] [--opt] [--out opt.xyz]
+  tpt-chem hf  <file.xyz> [--charge Q] [--mult M] [--basis sto-3g|6-31g] [--rohf] [--grad] [--opt] [--out opt.xyz]
   tpt-chem xrd <file.cif> [--max N]
   tpt-chem md  water <n_per_axis> [--model tip3p|spc] [--steps N] [--temp K]
   tpt-chem md  <file.xyz> [--steps N] [--dt FS] [--temp K] [--minimise] [--out traj.xyz]
@@ -104,6 +105,7 @@ fn cmd_hf(mut a: Args) -> Result<(), String> {
     let out = a.value("--out")?;
     let want_grad = a.flag("--grad");
     let want_opt = a.flag("--opt");
+    let want_rohf = a.flag("--rohf");
     let path = a.positional()?;
     let text = std::fs::read_to_string(&path).map_err(|e| format!("{path}: {e}"))?;
     let mut mol = parse_xyz(&text).map_err(|e| format!("{path}: {e:?}"))?;
@@ -161,11 +163,18 @@ fn cmd_hf(mut a: Args) -> Result<(), String> {
         if want_grad {
             return Err("--grad is only available for closed-shell RHF".into());
         }
-        let res = uhf_with_basis(&mol, mult, basis).map_err(|e| e.to_string())?;
-        println!("method: UHF/{label} (multiplicity {mult})");
-        println!("energy_hartree: {:.10}", res.energy);
-        println!("s_squared: {:.6}", res.s_squared);
-        println!("n_alpha: {}  n_beta: {}", res.n_alpha, res.n_beta);
+        if want_rohf {
+            let res = rohf_with_basis(&mol, mult, basis).map_err(|e| e.to_string())?;
+            println!("method: ROHF/{label} (multiplicity {mult})");
+            println!("energy_hartree: {:.10}", res.energy);
+            println!("n_alpha: {}  n_beta: {}", res.n_alpha, res.n_beta);
+        } else {
+            let res = uhf_with_basis(&mol, mult, basis).map_err(|e| e.to_string())?;
+            println!("method: UHF/{label} (multiplicity {mult})");
+            println!("energy_hartree: {:.10}", res.energy);
+            println!("s_squared: {:.6}", res.s_squared);
+            println!("n_alpha: {}  n_beta: {}", res.n_alpha, res.n_beta);
+        }
     }
     Ok(())
 }
