@@ -93,10 +93,10 @@ jobs:
   msrv:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           path: tpt-chemistry
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: tpt-solutions/tpt-math
           path: tpt-math
@@ -193,7 +193,7 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v4
         with:
           name: bench-output
