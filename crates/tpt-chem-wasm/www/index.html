@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hartree-Fock in your browser</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem auto; max-width: 48rem; padding: 0 1rem; color: #1b1f24; background: #fff; }
+    textarea { width: 100%; height: 10rem; font-family: ui-monospace, monospace; font-size: 0.95rem; box-sizing: border-box; }
+    button { font-size: 1rem; padding: 0.5rem 1rem; margin-top: 0.5rem; }
+    #out { font-family: ui-monospace, monospace; white-space: pre-wrap; margin-top: 1rem; }
+    .error { color: #b00020; }
+    @media (prefers-color-scheme: dark) {
+      body { color: #e6e6e6; background: #15171a; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Run HF in your browser</h1>
+  <p>RHF/STO-3G total energy for an XYZ geometry (Å). Computed entirely in WebAssembly.</p>
+  <textarea id="xyz" spellcheck="false">3
+water
+O 0.000000 0.000000 0.117000
+H 0.000000 0.757000 -0.469000
+H 0.000000 -0.757000 -0.469000
+</textarea>
+  <br>
+  <button id="run" type="button" disabled>Loading...</button>
+  <div id="out"></div>
+
+  <script type="module">
+    import init, { rhf_energy_xyz } from "./pkg/tpt_chem_wasm.js";
+
+    const out = document.getElementById("out");
+    const button = document.getElementById("run");
+
+    try {
+      await init();
+      button.disabled = false;
+      button.textContent = "Run RHF/STO-3G";
+    } catch (err) {
+      out.className = "error";
+      out.textContent = "Could not load the WebAssembly module: " + err;
+    }
+
+    button.addEventListener("click", () => {
+      out.className = "";
+      const started = performance.now();
+      try {
+        const energy = rhf_energy_xyz(document.getElementById("xyz").value);
+        const ms = (performance.now() - started).toFixed(0);
+        out.textContent = `E(RHF/STO-3G) = ${energy.toFixed(8)} Eh  (${ms} ms)`;
+      } catch (err) {
+        out.className = "error";
+        out.textContent = String(err);
+      }
+    });
+  </script>
+</body>
+</html>

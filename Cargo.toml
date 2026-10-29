@@ -10,6 +10,7 @@ members = [
     "crates/tpt-chem-crystal",
     "crates/tpt-chem-verify",
     "crates/tpt-chemistry",
+    "crates/tpt-chem-wasm",
 ]
 exclude = []
 
