@@ -139,8 +139,21 @@ jobs:
 
   # Kani does not support Windows hosts; bounded model checking runs on the
   # Linux CI runner via the harnesses in crates/tpt-chem-verify.
+  # One job per harness so a slow proof is isolated and capped by its own
+  # timeout instead of holding the whole run open.
   kani:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        harness:
+          - cell_index_in_bounds
+          - ewald_reciprocal_indices_in_range
+          - verlet_needs_update_monotone
+          - scf_density_is_psd
+          - eri_r_zero_no_panic
+          - eri_p_shell_coincident_no_panic
     steps:
       - uses: actions/checkout@v7
         with:
@@ -153,8 +166,9 @@ jobs:
       - run: |
           cargo install --locked kani-verifier
           cargo kani setup
-      - run: cargo kani -p tpt-chem-verify
+      - run: cargo kani -p tpt-chem-verify --harness ${{ matrix.harness }}
         working-directory: tpt-chemistry
+        timeout-minutes: 30
 
   # Criterion benchmarks in libtest "bencher" format, compared against the
   # stored baseline on master. Alerts comment on the pull request; they do

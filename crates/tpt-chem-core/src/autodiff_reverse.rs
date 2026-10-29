@@ -1,7 +1,7 @@
 //! Reverse-mode automatic differentiation (tape-based).
 //!
 //! The same generic code as [`crate::autodiff`] works here: write the energy
-//! against [`Real`](crate::autodiff::Real), and [`reverse_gradient`] records
+//! against [`Real`], and [`reverse_gradient`] records
 //! the operations on a tape during one forward pass, then propagates adjoints
 //! backwards. The gradient with respect to *all* inputs costs one forward and
 //! one backward sweep, independent of the number of inputs. That is what makes
