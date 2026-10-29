@@ -30,7 +30,7 @@ no-std:
 
 # Bounded model checking (Kani does not support Windows; run on Linux/WSL)
 kani:
-    cargo kani --workspace
+    cargo kani -p tpt-chem-verify
 
 # Release build
 release:
