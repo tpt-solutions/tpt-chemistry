@@ -139,3 +139,26 @@ fn forces_match(name: &str) {
         }
     }
 }
+
+#[test]
+fn reverse_mode_forces_match_forward_mode() {
+    for name in MOLECULES {
+        let fx = load(name);
+        let m = model(&fx);
+        let p = positions(&fx);
+        let (e_rev, f_rev) = m.energy_forces(&p);
+        let (e_fwd, f_fwd) = m.energy_forces_forward(&p);
+        assert!(
+            (e_rev - e_fwd).abs() < 1e-9,
+            "{name}: energy {e_rev} vs {e_fwd}"
+        );
+        for (i, (a, b)) in f_rev.iter().zip(&f_fwd).enumerate() {
+            for (x, y) in [(a.x, b.x), (a.y, b.y), (a.z, b.z)] {
+                assert!(
+                    (x - y).abs() < 1e-9 * (1.0 + y.abs()),
+                    "{name} atom {i}: reverse {x} vs forward {y}"
+                );
+            }
+        }
+    }
+}

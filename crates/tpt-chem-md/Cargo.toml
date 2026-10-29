@@ -24,7 +24,7 @@ serde_json = { version = "1", features = ["float_roundtrip"] }
 
 [dependencies]
 serde = { version = "1", default-features = false, features = ["derive"], optional = true }
-tpt-chem-core = { workspace = true }
+tpt-chem-core = { workspace = true, features = ["std"] }
 # 1D FFTs composed into 3D transforms for Particle Mesh Ewald (stands in for
 # the never-created `tpt-dsp`, see workspace Cargo.toml note).
 tpt-math-signal-fft = { workspace = true }

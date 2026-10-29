@@ -15,13 +15,16 @@
 //!   Pairs three bonds apart (1-4) have their Coulomb term divided by `scee`
 //!   and their LJ well depth divided by `scnb`.
 //!
-//! Energies are written against [`Real`], so forces come from forward-mode
-//! automatic differentiation ([`AmberModel::energy_forces`]) with no hand
-//! derivatives.
+//! Energies are written against [`Real`], so forces come from automatic
+//! differentiation with no hand derivatives. [`AmberModel::energy_forces`] uses
+//! reverse mode, which gives every force in one backward pass.
+//! [`AmberModel::energy_forces_forward`] uses forward mode, one pass per
+//! coordinate, and is kept as an independent check.
 
 use std::collections::VecDeque;
 
 use tpt_chem_core::autodiff::{gradient, Real};
+use tpt_chem_core::autodiff_reverse::reverse_gradient;
 use tpt_chem_core::units::COULOMB_PREFACTOR_KJ_ANG;
 use tpt_chem_core::vec3::Vec3;
 
@@ -132,6 +135,16 @@ fn cross<T: Real>(a: V3<T>, b: V3<T>) -> V3<T> {
 
 fn norm<T: Real>(a: V3<T>) -> T {
     dot(a, a).sqrt()
+}
+
+fn flat_coordinates(positions: &[Vec3]) -> Vec<f64> {
+    positions.iter().flat_map(|p| [p.x, p.y, p.z]).collect()
+}
+
+fn forces_from_gradient(n_atoms: usize, grad: &[f64]) -> Vec<Vec3> {
+    (0..n_atoms)
+        .map(|i| Vec3::new(-grad[3 * i], -grad[3 * i + 1], -grad[3 * i + 2]))
+        .collect()
 }
 
 fn point<T: Real>(x: &[T], i: usize) -> V3<T> {
@@ -267,13 +280,18 @@ impl AmberModel {
     /// Energy (kJ/mol) and forces (kJ/mol/Å) for atomic positions in Å.
     ///
     /// Forces are exact derivatives of [`AmberModel::energy`], from one
-    /// forward-mode pass per Cartesian coordinate.
+    /// reverse-mode pass for all Cartesian coordinates.
     pub fn energy_forces(&self, positions: &[Vec3]) -> (f64, Vec<Vec3>) {
-        let flat: Vec<f64> = positions.iter().flat_map(|p| [p.x, p.y, p.z]).collect();
+        let flat = flat_coordinates(positions);
+        let (energy, grad) = reverse_gradient(|x| self.energy(x), &flat);
+        (energy, forces_from_gradient(positions.len(), &grad))
+    }
+
+    /// Same as [`AmberModel::energy_forces`], but with forward mode (one pass per
+    /// coordinate). Kept as an independent check of the reverse-mode path.
+    pub fn energy_forces_forward(&self, positions: &[Vec3]) -> (f64, Vec<Vec3>) {
+        let flat = flat_coordinates(positions);
         let (energy, grad) = gradient(|x| self.energy(x), &flat);
-        let forces = (0..positions.len())
-            .map(|i| Vec3::new(-grad[3 * i], -grad[3 * i + 1], -grad[3 * i + 2]))
-            .collect();
-        (energy, forces)
+        (energy, forces_from_gradient(positions.len(), &grad))
     }
 }

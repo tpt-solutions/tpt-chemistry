@@ -562,7 +562,8 @@ usability/automation, and adoption work. Ordered roughly by priority.*
       from them, and the generic Lennard-Jones gradient matches the analytic all-pairs forces to
       1e-9 (`tpt-chem-md/tests/autodiff_forces.rs`). Reverse mode is in `tpt-chem-core/src/autodiff_reverse.rs` (tape-based, `std` feature only: one
       forward and one backward pass for any number of inputs; checked against forward mode on a
-      200-input function). It is not yet wired into the AMBER/MD force path
+      200-input function). `AmberModel::energy_forces` now uses it (one backward pass for all forces), with forward mode kept as
+      `energy_forces_forward` and cross-checked on all OPLS molecules. The MD `ForceModel` path is not yet wired in
 - [x] Independent checks against OpenMM: isolated LJ + Coulomb (relative 1e-6), periodic Ewald
       against OpenMM PME (1e-3 kJ/mol), and the AMBER model on N-methylacetamide (1e-3 kJ/mol).
       These found a bug: the Ewald heuristic was under-converged (α·r_c ≈ 1.77, about 0.6% low in
