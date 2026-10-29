@@ -84,14 +84,30 @@ fn positions(fx: &Value) -> Vec<Vec3> {
         .collect()
 }
 
+/// Molecules with OpenMM references. Benzene has no proper torsion terms (OPLS-AA
+/// defines none for aromatic ring quadruples), which the generator records.
+const MOLECULES: [&str; 7] = [
+    "butane",
+    "ethanol",
+    "isopropanol",
+    "acetone",
+    "dimethyl_ether",
+    "benzene",
+    "acetic_acid",
+];
+
 #[test]
-fn butane_energy_matches_openmm_opls() {
-    energy_matches("butane");
+fn energies_match_openmm_opls() {
+    for name in MOLECULES {
+        energy_matches(name);
+    }
 }
 
 #[test]
-fn ethanol_energy_matches_openmm_opls() {
-    energy_matches("ethanol");
+fn forces_match_openmm_opls() {
+    for name in MOLECULES {
+        forces_match(name);
+    }
 }
 
 fn energy_matches(name: &str) {
@@ -102,16 +118,6 @@ fn energy_matches(name: &str) {
         (energy - reference).abs() < 1e-3,
         "{name}: energy {energy:.6} vs OpenMM {reference:.6} kJ/mol"
     );
-}
-
-#[test]
-fn butane_forces_match_openmm_opls() {
-    forces_match("butane");
-}
-
-#[test]
-fn ethanol_forces_match_openmm_opls() {
-    forces_match("ethanol");
 }
 
 fn forces_match(name: &str) {

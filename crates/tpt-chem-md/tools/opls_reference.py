@@ -26,6 +26,8 @@ from openmm import app, unit
 def load_xml(path):
     root = ET.parse(path).getroot()
     types = {t.get("name"): t.get("class") for t in root.iter("Type")}
+    global MASSES
+    MASSES = {t.get("name"): float(t.get("mass")) for t in root.iter("Type") if t.get("mass")}
     atoms = {a.get("type"): a for a in root.iter("Atom")}
     bonds = {
         frozenset((b.get("class1"), b.get("class2"))): b for b in root.iter("Bond")
@@ -67,6 +69,122 @@ def methyl_hydrogens(carbon, partner):
         carbon + 1.09 * (np.cos(theta) * axis + np.sin(theta) * (np.cos(np.radians(120 * k + 30)) * u + np.sin(np.radians(120 * k + 30)) * v))
         for k in range(3)
     ]
+
+
+def tetrahedral_perp(axis):
+    helper = np.array([0.0, 0.0, 1.0]) if abs(axis[2]) < 0.9 else np.array([1.0, 0.0, 0.0])
+    u = np.cross(axis, helper)
+    return u / np.linalg.norm(u)
+
+
+def place_hydrogens(heavy, bonds):
+    """Heavy-atom skeleton → full geometry.
+
+    ``heavy`` is a list of dicts with ``pos`` (Å), ``element``, ``type``, ``h_type``,
+    ``n_h`` (hydrogens to add) and ``planar`` (sp2 CH: the H points outward).
+    Hydrogens go on the heavy atom's neighbours' opposite side: a cone of 109.5°
+    for one heavy neighbour, a tetrahedral pair for two, and the outward direction
+    for planar atoms. Only the topology and types matter for the comparison.
+    """
+    pos = [np.array(h["pos"], dtype=float) for h in heavy]
+    elements = [h["element"] for h in heavy]
+    types = [h["type"] for h in heavy]
+    all_bonds = list(bonds)
+    neighbours = {i: set() for i in range(len(heavy))}
+    for i, j in bonds:
+        neighbours[i].add(j)
+        neighbours[j].add(i)
+    for i, h in enumerate(heavy):
+        n = h["n_h"]
+        if n == 0:
+            continue
+        nb = [pos[j] for j in neighbours[i]]
+        centre = pos[i]
+        if h.get("planar"):
+            away = centre - sum((p - centre) / np.linalg.norm(p - centre) for p in nb)
+            away = away / np.linalg.norm(away)
+            dirs = [away]
+        elif len(nb) == 1:
+            axis = centre - nb[0]
+            axis = axis / np.linalg.norm(axis)
+            perp = tetrahedral_perp(axis)
+            v = np.cross(axis, perp)
+            theta = np.radians(180.0 - 109.5)
+            dirs = [np.cos(theta) * axis + np.sin(theta) * (np.cos(np.radians(120 * k + 30)) * perp + np.sin(np.radians(120 * k + 30)) * v)
+                    for k in range(n)]
+        elif len(nb) == 2 and n == 2:
+            to_a = (nb[0] - centre) / np.linalg.norm(nb[0] - centre)
+            to_b = (nb[1] - centre) / np.linalg.norm(nb[1] - centre)
+            away = -(to_a + to_b)
+            away = away / np.linalg.norm(away)
+            normal = np.cross(to_a, to_b)
+            normal = normal / np.linalg.norm(normal)
+            c, sn = np.cos(np.radians(54.75)), np.sin(np.radians(54.75))
+            dirs = [c * away + sn * normal, c * away - sn * normal]
+        else:
+            away = centre - sum((p - centre) / np.linalg.norm(p - centre) for p in nb)
+            away = away / np.linalg.norm(away)
+            dirs = [away] * n
+        for d in dirs[:n]:
+            length = 1.09 if h["h_type"] != "opls_155" and h["h_type"] != "opls_270" else 0.96
+            pos.append(centre + length * d)
+            elements.append("H")
+            types.append(h["h_type"])
+            all_bonds.append((i, len(pos) - 1))
+    return pos, elements, types, all_bonds
+
+
+def build_isopropanol():
+    """2-propanol. The carbinol carbon takes opls_157 (alcohol CT), the methyls opls_135."""
+    heavy = [
+        dict(pos=(0.0, 0.0, 0.0), element="C", type="opls_135", h_type="opls_140", n_h=3),
+        dict(pos=(1.5, 0.3, 0.1), element="C", type="opls_157", h_type="opls_140", n_h=1),
+        dict(pos=(2.1, 1.8, 0.4), element="C", type="opls_135", h_type="opls_140", n_h=3),
+        dict(pos=(2.2, -0.7, -0.2), element="O", type="opls_154", h_type="opls_155", n_h=1),
+    ]
+    return place_hydrogens(heavy, [(0, 1), (1, 2), (1, 3)])
+
+
+def build_acetone():
+    """Acetone: C=O carbon opls_280, carbonyl O opls_281, methyls opls_135."""
+    heavy = [
+        dict(pos=(0.0, 0.0, 0.0), element="C", type="opls_135", h_type="opls_140", n_h=3),
+        dict(pos=(1.5, 0.3, 0.0), element="C", type="opls_280", h_type="opls_140", n_h=0),
+        dict(pos=(2.2, 1.5, 0.2), element="O", type="opls_281", h_type="opls_140", n_h=0),
+        dict(pos=(2.1, -0.9, 0.3), element="C", type="opls_135", h_type="opls_140", n_h=3),
+    ]
+    return place_hydrogens(heavy, [(0, 1), (1, 2), (1, 3)])
+
+
+def build_dimethyl_ether():
+    """Dimethyl ether: ether O opls_180, methyls opls_181 with alpha H opls_185."""
+    heavy = [
+        dict(pos=(0.0, 0.0, 0.0), element="C", type="opls_181", h_type="opls_185", n_h=3),
+        dict(pos=(1.4, 0.3, 0.1), element="O", type="opls_180", h_type="opls_185", n_h=0),
+        dict(pos=(2.4, -0.8, 0.3), element="C", type="opls_181", h_type="opls_185", n_h=3),
+    ]
+    return place_hydrogens(heavy, [(0, 1), (1, 2)])
+
+
+def build_benzene():
+    """Benzene: aromatic CA opls_145, HA opls_146 pointing outward (planar)."""
+    heavy = []
+    for k in range(6):
+        a = np.radians(60 * k)
+        heavy.append(dict(pos=(1.39 * np.cos(a), 1.39 * np.sin(a), 0.0), element="C", type="opls_145",
+                          h_type="opls_146", n_h=1, planar=True))
+    return place_hydrogens(heavy, [(k, (k + 1) % 6) for k in range(6)])
+
+
+def build_acetic_acid():
+    """Acetic acid: carboxyl C opls_267, carbonyl O opls_269, hydroxyl O opls_268, HO opls_270."""
+    heavy = [
+        dict(pos=(0.0, 0.0, 0.0), element="C", type="opls_135", h_type="opls_140", n_h=3),
+        dict(pos=(1.5, 0.2, 0.0), element="C", type="opls_267", h_type="opls_140", n_h=0),
+        dict(pos=(2.2, 1.4, 0.1), element="O", type="opls_269", h_type="opls_140", n_h=0),
+        dict(pos=(2.2, -0.9, -0.2), element="O", type="opls_268", h_type="opls_270", n_h=1),
+    ]
+    return place_hydrogens(heavy, [(0, 1), (1, 2), (1, 3)])
 
 
 def build_ethanol():
@@ -122,7 +240,15 @@ def build():
 
 def main(out_dir: str, xml_path: str) -> None:
     types_to_class, atom_params, bond_params, angle_params, torsion_params = load_xml(xml_path)
-    for name, builder in (("butane", build), ("ethanol", build_ethanol)):
+    for name, builder in (
+        ("butane", build),
+        ("ethanol", build_ethanol),
+        ("isopropanol", build_isopropanol),
+        ("acetone", build_acetone),
+        ("dimethyl_ether", build_dimethyl_ether),
+        ("benzene", build_benzene),
+        ("acetic_acid", build_acetic_acid),
+    ):
         write_molecule(name, builder(), out_dir, types_to_class, atom_params, bond_params, angle_params, torsion_params)
 
 
@@ -139,6 +265,7 @@ def write_molecule(name, geometry, out_dir, types_to_class, atom_params, bond_pa
     for i, j in bonds:
         topology.addBond(atoms[i], atoms[j])
 
+    skipped_torsions = []
     system = mm.System()
     bond_f = mm.HarmonicBondForce()
     angle_f = mm.HarmonicAngleForce()
@@ -175,6 +302,11 @@ def write_molecule(name, geometry, out_dir, types_to_class, atom_params, bond_pa
                     continue
                 cls = (classes[i], classes[j], classes[k], classes[l])
                 t = find_torsion(torsion_params, cls)
+                if t is None:
+                    # OPLS-AA defines no dihedral for this class quadruple (for
+                    # example aromatic ring torsions), so the term is zero.
+                    skipped_torsions.append(cls)
+                    continue
                 c_coeffs = [float(t.get(f"c{n}")) for n in range(6)]
                 torsion_f.addTorsion(i, j, k, l, *c_coeffs)
     system.addForce(bond_f)
@@ -195,7 +327,7 @@ def write_molecule(name, geometry, out_dir, types_to_class, atom_params, bond_pa
                 "charge": float(atom_params[t].get("charge")),
                 "sigma": float(atom_params[t].get("sigma")) * 10.0,
                 "epsilon": float(atom_params[t].get("epsilon")),
-                "mass": 12.011 if t != "opls_140" else 1.008,
+                "mass": MASSES[t],
             }
             for t in opls_types
         ],
@@ -228,6 +360,7 @@ def write_molecule(name, geometry, out_dir, types_to_class, atom_params, bond_pa
     out.mkdir(parents=True, exist_ok=True)
     (out / f"{name}_opls.json").write_text(json.dumps(record, indent=1), encoding="utf-8")
     print(f"wrote {name}_opls.json: energy", energy, "atoms", len(atoms), "bonds", len(bonds),
+          "skipped (no OPLS dihedral)", len(skipped_torsions),
           "angles", len(record["angles"]), "rb torsions", len(record["rb_torsions"]))
 
 

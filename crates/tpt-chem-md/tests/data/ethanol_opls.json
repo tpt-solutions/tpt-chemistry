@@ -66,14 +66,14 @@
    "charge": -0.683,
    "sigma": 3.12,
    "epsilon": 0.71128,
-   "mass": 12.011
+   "mass": 15.9994
   },
   {
    "type": "opls_155",
    "charge": 0.418,
    "sigma": 10.0,
    "epsilon": 0.0,
-   "mass": 12.011
+   "mass": 1.008
   },
   {
    "type": "opls_140",

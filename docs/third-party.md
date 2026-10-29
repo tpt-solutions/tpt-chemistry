@@ -29,7 +29,7 @@ files, or provides an independent reference for a test.
 | --- | --- | --- |
 | OpenMM 8.x | MIT | Reference energies and forces (AMBER, OPLS, Ewald/PME, LJ), the DCD fixture (`tools/openmm_dcd_fixture.py`), the AMBER reference (`tools/amber_reference.py`) |
 | amber14 force-field XML (distributed with OpenMM) | Parameters published by the AMBER project; the XML ships under OpenMM's MIT licence | Atom types, charges and bonded terms for the AMBER subset |
-| foyer `oplsaa.xml` (mosdef-hub/foyer, 0.7.6) | MIT | OPLS-AA parameters for the butane and ethanol references (`crates/tpt-chem-md/tools/opls_reference.py`) |
+| foyer `oplsaa.xml` (mosdef-hub/foyer, 0.7.6) | MIT | OPLS-AA parameters for the seven OPLS reference molecules (`crates/tpt-chem-md/tools/opls_reference.py`) |
 | spglib 2.x | BSD-3-Clause | Symmetry operations for the 230 space groups (`tools/gen_spacegroups.py`) |
 | basis_set_exchange 0.12 | BSD-3-Clause | cc-pVDZ basis data for H–Ar (`tools/gen_cc_pvdz.py`). 6-31G data for Na–Ar come from the BSE REST API (`crates/tpt-chem-quantum/tools/gen_631g_na_ar.py`) |
 | GROMACS `oplsaa.ff` (`ffnonbonded.itp`, `atomtypes.atp`, at commit `aa66efd`) | LGPL-2.1 (GROMACS source); the parameter values are published OPLS-AA data | Cross-check only, for the butane atom types in `tests/data/butane_opls.json`. No file from it is in the repository |
