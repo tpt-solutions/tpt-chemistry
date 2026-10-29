@@ -402,7 +402,7 @@ pub fn rhf_with_basis(mol: &Molecule, basis: BasisSet) -> Result<HfResult, HfErr
         n_elec,
     } = scf_setup(mol, basis)?;
     // Closed shell only: open shells go through `uhf`.
-    if n_elec % 2 != 0 {
+    if !n_elec.is_multiple_of(2) {
         return Err(HfError::UnsupportedElement);
     }
     let n_occ = n_elec / 2;

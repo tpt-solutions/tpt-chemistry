@@ -125,7 +125,7 @@ pub fn uhf_with_basis(
         return Err(HfError::UnsupportedElement);
     }
     let unpaired = (multiplicity - 1) as usize;
-    if unpaired > n_elec || (n_elec - unpaired) % 2 != 0 {
+    if unpaired > n_elec || !(n_elec - unpaired).is_multiple_of(2) {
         return Err(HfError::UnsupportedElement);
     }
     let n_beta = (n_elec - unpaired) / 2;
