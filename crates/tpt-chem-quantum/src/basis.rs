@@ -121,23 +121,32 @@ pub fn sto3g_basis(atoms: &[(u8, Vec3)]) -> Result<Vec<Shell>, BasisError> {
     Ok(out)
 }
 
-/// 6-31G shells for element `z` (H–Ne) at `center` (Bohr).
+/// 6-31G shells for element `z` (H–Ar) at `center` (Bohr).
 ///
 /// # Errors
-/// [`BasisError::UnsupportedElement`] for Z > 10.
+/// [`BasisError::UnsupportedElement`] for Z > 18.
 pub fn pople_631g_shells(z: u8, center: Vec3) -> Result<Vec<Shell>, BasisError> {
-    if z == 0 || z > 10 {
-        return Err(BasisError::UnsupportedElement(z));
+    match z {
+        1..=10 => Ok(crate::basis_631g::POPLE_631G[(z - 1) as usize]
+            .iter()
+            .map(|&(l, prims)| {
+                let mut sh = Shell::new(l, center, prims.to_vec());
+                sh.normalize();
+                sh
+            })
+            .collect()),
+        11..=18 => {
+            let parsed = parse_element_shells(POPLE_631G_NA_AR_DATA, z)
+                .ok_or(BasisError::UnsupportedElement(z))?;
+            Ok(build_shells(parsed, center))
+        }
+        _ => Err(BasisError::UnsupportedElement(z)),
     }
-    Ok(crate::basis_631g::POPLE_631G[(z - 1) as usize]
-        .iter()
-        .map(|&(l, prims)| {
-            let mut sh = Shell::new(l, center, prims.to_vec());
-            sh.normalize();
-            sh
-        })
-        .collect())
 }
+
+/// 6-31G data for Na–Ar, generated from Basis Set Exchange by
+/// `tools/gen_631g_na_ar.py`.
+const POPLE_631G_NA_AR_DATA: &str = include_str!("../data/631g-na-ar.txt");
 
 /// cc-pVDZ data for H–Ar, generated from Basis Set Exchange by
 /// `tools/gen_cc_pvdz.py`.
@@ -152,14 +161,23 @@ type ParsedShell = (u8, bool, Vec<(f64, f64)>);
 /// # Errors
 /// [`BasisError::UnsupportedElement`] outside H–Ar.
 pub fn cc_pvdz_shells(z: u8, center: Vec3) -> Result<Vec<Shell>, BasisError> {
-    let unsupported = BasisError::UnsupportedElement(z);
-    if z == 0 || z > 18 {
-        return Err(unsupported);
-    }
-    // (l, spherical, primitives) for each shell of this element.
+    let parsed = if (1..=18).contains(&z) {
+        parse_element_shells(CC_PVDZ_DATA, z)
+    } else {
+        None
+    };
+    parsed
+        .map(|parsed| build_shells(parsed, center))
+        .ok_or(BasisError::UnsupportedElement(z))
+}
+
+/// Parses the shells of element `z` from a data file in the
+/// `@ <Z>` / `shell <l> <spherical>` / `<exponent> <coefficient>` format.
+/// Returns `None` if the element is absent or the data is malformed.
+fn parse_element_shells(data: &str, z: u8) -> Option<Vec<ParsedShell>> {
     let mut parsed: Vec<ParsedShell> = Vec::new();
     let mut inside = false;
-    for line in CC_PVDZ_DATA.lines() {
+    for line in data.lines() {
         let line = line.trim();
         if line.is_empty() || line.starts_with('#') {
             continue;
@@ -176,26 +194,26 @@ pub fn cc_pvdz_shells(z: u8, center: Vec3) -> Result<Vec<Shell>, BasisError> {
         }
         if let Some(header) = line.strip_prefix("shell ") {
             let mut fields = header.split_whitespace();
-            let l = fields.next().and_then(|x| x.parse::<u8>().ok());
-            let sph = fields.next().and_then(|x| x.parse::<u8>().ok());
-            match (l, sph) {
-                (Some(l), Some(sph)) => parsed.push((l, sph == 1, Vec::new())),
-                _ => return Err(unsupported),
-            }
+            let l = fields.next().and_then(|x| x.parse::<u8>().ok())?;
+            let sph = fields.next().and_then(|x| x.parse::<u8>().ok())?;
+            parsed.push((l, sph == 1, Vec::new()));
         } else {
             let mut fields = line.split_whitespace();
-            let alpha = fields.next().and_then(|x| x.parse::<f64>().ok());
-            let coef = fields.next().and_then(|x| x.parse::<f64>().ok());
-            match (alpha, coef, parsed.last_mut()) {
-                (Some(a), Some(c), Some(shell)) => shell.2.push((a, c)),
-                _ => return Err(unsupported),
-            }
+            let alpha = fields.next().and_then(|x| x.parse::<f64>().ok())?;
+            let coef = fields.next().and_then(|x| x.parse::<f64>().ok())?;
+            parsed.last_mut()?.2.push((alpha, coef));
         }
     }
     if parsed.is_empty() {
-        return Err(unsupported);
+        None
+    } else {
+        Some(parsed)
     }
-    Ok(parsed
+}
+
+/// Normalized shells from parsed data, with spherical flags applied.
+fn build_shells(parsed: Vec<ParsedShell>, center: Vec3) -> Vec<Shell> {
+    parsed
         .into_iter()
         .map(|(l, sph, prims)| {
             let mut sh = Shell::new(l, center, prims);
@@ -205,7 +223,7 @@ pub fn cc_pvdz_shells(z: u8, center: Vec3) -> Result<Vec<Shell>, BasisError> {
             sh.normalize();
             sh
         })
-        .collect())
+        .collect()
 }
 
 /// Available Gaussian basis sets.
@@ -285,5 +303,43 @@ mod tests {
             sto3g_shells(11, Vec3::ZERO),
             Err(BasisError::UnsupportedElement(11))
         );
+    }
+
+    #[test]
+    fn pople_631g_na_ar_function_counts() {
+        // Na and Ar in BSE 6-31G: 1s, 2sp, 3sp, 4sp (13 functions each).
+        let na = pople_631g_shells(11, Vec3::ZERO).unwrap();
+        let ar = pople_631g_shells(18, Vec3::ZERO).unwrap();
+        let count = |shells: &[Shell]| {
+            shells
+                .iter()
+                .map(|s| crate::gaussian::n_cartesian(s.l))
+                .sum::<usize>()
+        };
+        assert_eq!(count(&na), 13);
+        assert_eq!(count(&ar), 13);
+    }
+
+    #[test]
+    fn pople_631g_na_ar_shells_are_normalized() {
+        use crate::integrals::overlap_shell;
+        for z in 11..=18 {
+            for sh in pople_631g_shells(z, Vec3::ZERO).unwrap() {
+                let s = overlap_shell(&sh, &sh);
+                for (i, row) in s.iter().enumerate() {
+                    assert!(
+                        (row[i] - 1.0).abs() < 1e-8,
+                        "Z={z} l={} diag {}",
+                        sh.l,
+                        row[i]
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn pople_631g_rejects_beyond_argon() {
+        assert!(pople_631g_shells(19, Vec3::ZERO).is_err());
     }
 }
