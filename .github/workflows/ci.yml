@@ -15,10 +15,10 @@ jobs:
   fmt:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           path: tpt-chemistry
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: tpt-solutions/tpt-math
           path: tpt-math
@@ -31,10 +31,10 @@ jobs:
   clippy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           path: tpt-chemistry
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: tpt-solutions/tpt-math
           path: tpt-math
@@ -47,10 +47,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           path: tpt-chemistry
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: tpt-solutions/tpt-math
           path: tpt-math
@@ -82,10 +82,10 @@ jobs:
   deny:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           path: tpt-chemistry
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: tpt-solutions/tpt-math
           path: tpt-math
@@ -98,10 +98,10 @@ jobs:
   no_std:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           path: tpt-chemistry
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: tpt-solutions/tpt-math
           path: tpt-math
@@ -117,10 +117,10 @@ jobs:
   kani:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           path: tpt-chemistry
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: tpt-solutions/tpt-math
           path: tpt-math
@@ -140,10 +140,10 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           path: tpt-chemistry
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: tpt-solutions/tpt-math
           path: tpt-math
