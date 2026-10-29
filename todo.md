@@ -470,9 +470,11 @@ usability/automation, and adoption work. Ordered roughly by priority.*
       harmonic bonds and angles, periodic torsions including impropers, LJ and Coulomb with 1-4
       scaling, forces by autodiff). Energy and forces match OpenMM amber14 on N-methylacetamide to
       1e-3 kJ/mol (`tests/amber_openmm.rs`, fixture from `tools/amber_reference.py`). Atom types are
-      assigned by hand. OPLS-AA is validated for n-butane (`tests/opls_openmm.rs`, parameters from
-      foyer's `oplsaa.xml`, cross-checked against GROMACS's `oplsaa.ff` for the CT and HC types).
-      Only that subset exists, and UFF is still open. SPC and TIP3P rigid water done
+      assigned by hand. OPLS-AA is validated against OpenMM for n-butane and ethanol (`tests/opls_openmm.rs`,
+      parameters from foyer 0.7.6's `oplsaa.xml`, cross-checked against GROMACS's `oplsaa.ff` for the
+      CT and HC types). Ethanol adds the hydroxyl O and H types (opls_154, opls_155). Both energies and
+      forces agree with OpenMM to 1e-3. Atom types are still hand-assigned, with no SMARTS typing, and
+      UFF is still open. SPC and TIP3P rigid water done
       (`tpt-chem-md/src/water.rs`: `water_box` wires charges, intramolecular
       exclusions and SHAKE constraints; `examples/water_pme.rs` gives
       −39.7 kJ/mol/molecule PE at 300 K with PME and ~1 kJ/mol NVE drift

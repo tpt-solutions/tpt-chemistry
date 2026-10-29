@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Write n-butane (OPLS-AA) and OpenMM's reference values to tests/data/butane_opls.json.
+"""Write OPLS-AA test molecules and OpenMM's reference values to tests/data/<name>_opls.json.
+
+Molecules: n-butane (alkane types only) and ethanol (adds the hydroxyl O and H
+types, opls_154 and opls_155, with their C–O, O–H and torsion terms).
 
 Parameters come from foyer's oplsaa.xml (MIT licence, https://github.com/mosdef-hub/foyer).
 Each term is looked up by OPLS class, so this script contains no hand-entered
@@ -7,7 +10,7 @@ numbers. OpenMM (MIT) evaluates the same terms, and its energy and forces are th
 
 Atom types: CH3 = opls_135, CH2 = opls_136, H = opls_140.
 
-    PYTHONPATH=<site-packages with openmm> python tools/opls_reference.py tests/data /path/to/oplsaa.xml
+    python tools/opls_reference.py tests/data /path/to/oplsaa.xml
 """
 
 import json
@@ -66,6 +69,29 @@ def methyl_hydrogens(carbon, partner):
     ]
 
 
+def build_ethanol():
+    """Ethanol: CH3–CH2–OH with approximate, non-degenerate coordinates (Å).
+
+    Only the topology and the OPLS types matter for the energy comparison, so the
+    geometry needs no equilibrium structure. It only has to avoid collinear angles.
+    """
+    positions = [
+        np.array([0.0, 0.0, 0.0]),    # C0 (CH3)
+        np.array([1.5, 0.2, 0.1]),    # C1 (CH2)
+        np.array([2.3, 1.4, 0.3]),    # O2
+        np.array([3.2, 1.3, 0.9]),    # HO3
+        np.array([-0.5, 0.9, 0.2]),   # H4 on C0
+        np.array([-0.4, -0.8, 0.7]),  # H5 on C0
+        np.array([-0.4, -0.3, -1.0]), # H6 on C0
+        np.array([1.6, -0.6, 1.0]),   # H7 on C1
+        np.array([1.7, -0.5, -0.9]),  # H8 on C1
+    ]
+    elements = ["C", "C", "O", "H", "H", "H", "H", "H", "H"]
+    types = ["opls_135", "opls_136", "opls_154", "opls_155", "opls_140", "opls_140", "opls_140", "opls_140", "opls_140"]
+    bonds = [(0, 1), (1, 2), (2, 3), (0, 4), (0, 5), (0, 6), (1, 7), (1, 8)]
+    return positions, elements, types, bonds
+
+
 def build():
     """n-butane: C0–C1–C2–C3 in a zigzag, hydrogens placed approximately (Å)."""
     c = [np.array([0.0, 0.0, 0.0]), np.array([1.27, 0.78, 0.0]), np.array([2.54, 0.0, 0.0]), np.array([3.81, 0.78, 0.0])]
@@ -96,7 +122,12 @@ def build():
 
 def main(out_dir: str, xml_path: str) -> None:
     types_to_class, atom_params, bond_params, angle_params, torsion_params = load_xml(xml_path)
-    positions, elements, opls_types, bonds = build()
+    for name, builder in (("butane", build), ("ethanol", build_ethanol)):
+        write_molecule(name, builder(), out_dir, types_to_class, atom_params, bond_params, angle_params, torsion_params)
+
+
+def write_molecule(name, geometry, out_dir, types_to_class, atom_params, bond_params, angle_params, torsion_params):
+    positions, elements, opls_types, bonds = geometry
     classes = [types_to_class[t] for t in opls_types]
 
     topology = app.Topology()
@@ -195,8 +226,8 @@ def main(out_dir: str, xml_path: str) -> None:
 
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    (out / "butane_opls.json").write_text(json.dumps(record, indent=1), encoding="utf-8")
-    print("wrote butane_opls.json: energy", energy, "atoms", len(atoms), "bonds", len(bonds),
+    (out / f"{name}_opls.json").write_text(json.dumps(record, indent=1), encoding="utf-8")
+    print(f"wrote {name}_opls.json: energy", energy, "atoms", len(atoms), "bonds", len(bonds),
           "angles", len(record["angles"]), "rb torsions", len(record["rb_torsions"]))
 
 

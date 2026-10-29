@@ -1,6 +1,7 @@
 //! The OPLS-AA form (Ryckaert–Bellemans torsions, scaling 0.5 for 1-4 pairs)
-//! against OpenMM on n-butane. The fixture `tests/data/butane_opls.json` is
-//! written by `tools/opls_reference.py`. Parameters are read from foyer's
+//! against OpenMM on n-butane (alkane types) and ethanol (adds the hydroxyl
+//! O and H types). The fixtures `tests/data/<name>_opls.json` are written by
+//! `tools/opls_reference.py`. Parameters are read from foyer 0.7.6's
 //! `oplsaa.xml` (MIT).
 
 use serde_json::Value;
@@ -8,8 +9,8 @@ use serde_json::Value;
 use tpt_chem_core::vec3::Vec3;
 use tpt_chem_md::amber::{AmberModel, AngleTerm, BondTerm, RbTorsionTerm};
 
-fn load() -> Value {
-    let path = format!("{}/tests/data/butane_opls.json", env!("CARGO_MANIFEST_DIR"));
+fn load(name: &str) -> Value {
+    let path = format!("{}/tests/data/{name}_opls.json", env!("CARGO_MANIFEST_DIR"));
     let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
     serde_json::from_str(&text).unwrap()
 }
@@ -84,19 +85,37 @@ fn positions(fx: &Value) -> Vec<Vec3> {
 }
 
 #[test]
-fn energy_matches_openmm_opls() {
-    let fx = load();
+fn butane_energy_matches_openmm_opls() {
+    energy_matches("butane");
+}
+
+#[test]
+fn ethanol_energy_matches_openmm_opls() {
+    energy_matches("ethanol");
+}
+
+fn energy_matches(name: &str) {
+    let fx = load(name);
     let (energy, _) = model(&fx).energy_forces(&positions(&fx));
     let reference = fx["openmm_energy_kj_mol"].as_f64().unwrap();
     assert!(
         (energy - reference).abs() < 1e-3,
-        "energy {energy:.6} vs OpenMM {reference:.6} kJ/mol"
+        "{name}: energy {energy:.6} vs OpenMM {reference:.6} kJ/mol"
     );
 }
 
 #[test]
-fn forces_match_openmm_opls() {
-    let fx = load();
+fn butane_forces_match_openmm_opls() {
+    forces_match("butane");
+}
+
+#[test]
+fn ethanol_forces_match_openmm_opls() {
+    forces_match("ethanol");
+}
+
+fn forces_match(name: &str) {
+    let fx = load(name);
     let (_, forces) = model(&fx).energy_forces(&positions(&fx));
     let reference = fx["openmm_forces_kj_mol_angstrom"].as_array().unwrap();
     for (i, (f, r)) in forces.iter().zip(reference).enumerate() {
