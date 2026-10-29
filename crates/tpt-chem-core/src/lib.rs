@@ -39,6 +39,8 @@
 extern crate alloc;
 
 pub mod autodiff;
+#[cfg(feature = "std")]
+pub mod autodiff_reverse;
 pub mod coords;
 pub mod element;
 pub mod forcefield;
