@@ -62,6 +62,31 @@ jobs:
         env:
           RUSTDOCFLAGS: -D warnings
 
+  # Line coverage as an LCOV report artifact. Informational only: it does not
+  # gate merges until a coverage floor has been agreed.
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: tpt-chemistry
+      - uses: actions/checkout@v7
+        with:
+          repository: tpt-solutions/tpt-math
+          path: tpt-math
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+      - run: cargo llvm-cov --workspace --lcov --output-path lcov.info
+        working-directory: tpt-chemistry
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lcov
+          path: tpt-chemistry/lcov.info
+
   # Builds on the oldest supported toolchain, matching `rust-version` in the
   # workspace Cargo.toml. Dependencies resolve fresh here (Cargo.lock is not
   # committed), so a newer transitive dependency can break this job first.
