@@ -8,15 +8,18 @@
 //!   is `p: (x,y,z)`, `d: (xx,yy,zz,xy,xz,yz)`, while this crate's
 //!   [`cartesian_components`] enumerates `x`-fastest (`p: (z,y,x)`); the MO
 //!   coefficients are reordered on output.
-//! * **Cartesian flags** — molden defaults to spherical `d`/`f`; this
-//!   crate's basis is Cartesian, so `[5D7F]` is emitted whenever any shell
-//!   has `l ≥ 2`.
+//! * **Spherical flags** — `[5D]` marks pure d shells and `[6D]` Cartesian d
+//!   shells. Spherical d coefficients are already in molden's harmonic order
+//!   and are written as they are.
+//! * **Supported shells** — s, p and d only. Higher momenta panic rather than
+//!   writing zero coefficients.
 
 use tpt_chem_core::element::symbol;
 use tpt_chem_core::molecule::Molecule;
 
 use crate::gaussian::{cartesian_components, Shell};
 use crate::hf::HfResult;
+use crate::spherical;
 
 /// Molden's Cartesian component order per angular momentum.
 fn molden_order(l: u8) -> &'static [(u8, u8, u8)] {
@@ -74,9 +77,16 @@ pub fn write_molden(mol: &Molecule, shells: &[Shell], result: &HfResult) -> Stri
         ));
     }
 
-    let max_l = shells.iter().map(|s| s.l).max().unwrap_or(0);
-    if max_l >= 2 {
-        out.push_str("[5D7F]\n");
+    assert!(
+        shells.iter().all(|s| s.l <= 2),
+        "Molden output supports s, p and d shells only"
+    );
+    // `[5D]` selects pure (spherical) d and `[6D]` Cartesian d. Molden has one
+    // keyword per angular momentum, so a basis mixing both is written as pure.
+    if shells.iter().any(|s| s.l == 2 && s.spherical) {
+        out.push_str("[5D]\n");
+    } else if shells.iter().any(|s| s.l == 2) {
+        out.push_str("[6D]\n");
     }
 
     out.push_str("[GTO]\n");
@@ -131,6 +141,21 @@ pub fn write_molden(mol: &Molecule, shells: &[Shell], result: &HfResult) -> Stri
         let mut seq = 0usize;
         let mut cursor = 0usize;
         for sh in shells {
+            if sh.spherical {
+                // Spherical d functions are stored in molden's harmonic order
+                // (D0, D+1, D-1, D+2, D-2), so no reordering is needed.
+                let n_functions = spherical::transform(sh).first().map_or(0, Vec::len);
+                for m in 0..n_functions {
+                    seq += 1;
+                    out.push_str(&format!(
+                        "  {}  {:.10}\n",
+                        seq,
+                        result.coefficients[(cursor + m) * nb + mo]
+                    ));
+                }
+                cursor += n_functions;
+                continue;
+            }
             let comps = cartesian_components(sh.l);
             for &m in molden_order(sh.l) {
                 let ci = comps.iter().position(|&c| c == m).expect("component");
@@ -269,5 +294,62 @@ mod tests {
         let result = rhf(&m).unwrap();
         let text = write_molden(&m, &shells, &result);
         assert_eq!(text.matches("Occup= 2.000000").count(), 5);
+    }
+
+    #[test]
+    fn spherical_d_basis_writes_pure_d_coefficients() {
+        use crate::basis::BasisSet;
+        use crate::hf::rhf_with_basis;
+
+        let mol = water();
+        let atoms: Vec<(u8, Vec3)> = mol
+            .atoms()
+            .map(|a| (a.z, a.pos * angstrom_to_bohr(1.0)))
+            .collect();
+        let shells = BasisSet::CcPvdz.build(&atoms).unwrap();
+        let res = rhf_with_basis(&mol, BasisSet::CcPvdz).unwrap();
+        let text = write_molden(&mol, &shells, &res);
+        let nb = res.n_basis;
+
+        assert!(text.contains("[5D]\n"));
+        assert!(!text.contains("[6D]"));
+        assert_eq!(text.matches("Occup=").count(), nb);
+
+        // Each MO block is Occup, Energy, Spin and then one line per basis
+        // function. The spherical d functions are written in the order the SCF
+        // uses, so their values must match the coefficient matrix directly.
+        // (Cartesian p shells are reordered, so they are not checked here.)
+        let mut offset = 0;
+        let mut d_offset = None;
+        for sh in &shells {
+            let n = if sh.spherical {
+                spherical::transform(sh).first().map_or(0, Vec::len)
+            } else {
+                cartesian_components(sh.l).len()
+            };
+            if sh.spherical && d_offset.is_none() {
+                d_offset = Some(offset);
+            }
+            offset += n;
+        }
+        let d_offset = d_offset.expect("cc-pVDZ water has a spherical d shell");
+
+        let mo_text = text.split("[MO]\n").nth(1).unwrap();
+        let lines: Vec<&str> = mo_text.lines().collect();
+        let block_len = 3 + nb;
+        for mo in 0..nb {
+            let block = &lines[mo * block_len..(mo + 1) * block_len];
+            assert!(block[0].starts_with("Occup="));
+            for m in 0..5 {
+                let f = d_offset + m;
+                let value: f64 = block[3 + f]
+                    .split_whitespace()
+                    .nth(1)
+                    .unwrap()
+                    .parse()
+                    .unwrap();
+                assert!((value - res.coefficients[f * nb + mo]).abs() < 1e-9);
+            }
+        }
     }
 }

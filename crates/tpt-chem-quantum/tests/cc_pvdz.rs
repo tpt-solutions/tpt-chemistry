@@ -75,9 +75,32 @@ fn water_energy_regression_value() {
 }
 
 #[test]
-fn gradients_refuse_spherical_bases() {
+fn cc_pvdz_gradient_matches_finite_difference() {
+    use tpt_chem_core::units::angstrom_to_bohr;
     use tpt_chem_quantum::gradient::rhf_gradient_with_basis;
-    use tpt_chem_quantum::hf::HfError;
-    let err = rhf_gradient_with_basis(&water(None), BasisSet::CcPvdz).unwrap_err();
-    assert_eq!(err, HfError::SphericalUnsupported);
+
+    // One coordinate of the oxygen (the atom carrying the d shell) is enough
+    // to exercise the spherical d path; the gradient is nonzero at this
+    // experimental geometry.
+    let displaced = |dz: f64| {
+        let base = water(None);
+        let mut m = Molecule::new("water");
+        for (i, a) in base.atoms().enumerate() {
+            let mut p = a.pos;
+            if i == 0 {
+                p.z += dz;
+            }
+            m.add_atom_raw(a.z, p);
+        }
+        m
+    };
+    let (_, g) = rhf_gradient_with_basis(&displaced(0.0), BasisSet::CcPvdz).unwrap();
+    let h = 1e-3; // Ångström
+    let e = |dz| {
+        rhf_with_basis(&displaced(dz), BasisSet::CcPvdz)
+            .unwrap()
+            .energy
+    };
+    let fd = (e(h) - e(-h)) / (2.0 * h) / angstrom_to_bohr(1.0);
+    assert!((g[0].z - fd).abs() < 5e-5, "analytic {} vs fd {fd}", g[0].z);
 }

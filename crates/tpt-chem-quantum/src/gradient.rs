@@ -25,6 +25,7 @@ use crate::basis::BasisSet;
 use crate::gaussian::{cartesian_components, n_cartesian, primitive_normalization, Shell};
 use crate::hf::{rhf_with_basis, HfError, HfResult};
 use crate::integrals::{eri_shell, kinetic_shell, nuclear_shell, overlap_shell};
+use crate::spherical;
 
 /// Single-primitive shell whose integrals are those of the unnormalized
 /// Cartesian primitive `x^i y^j z^k e^(-alpha r^2)`.
@@ -126,6 +127,41 @@ fn flat4(t: Vec<Vec<Vec<Vec<f64>>>>) -> Vec<f64> {
     t.into_iter().flatten().flatten().flatten().collect()
 }
 
+/// Pulls a basis-function matrix `m` (`nb × nb`) back to Cartesian components:
+/// `M_cart[c][c'] = Σ_mn T_a[c][m] M[m][n] T_b[c'][n]`, shell pair by shell
+/// pair, where `T` is the per-shell transform from [`spherical::transform`].
+/// The energy terms are linear in the density or quadratic in its products,
+/// and the transform acts the same way on each index, so evaluating them in
+/// Cartesian space gives the same value as in basis-function space.
+fn to_cartesian_space(m: &[f64], nb: usize, transforms: &[Vec<Vec<f64>>]) -> Vec<f64> {
+    let mut sph_off = Vec::with_capacity(transforms.len());
+    let mut cart_off = Vec::with_capacity(transforms.len());
+    let (mut n_sph, mut n_cart) = (0, 0);
+    for t in transforms {
+        sph_off.push(n_sph);
+        cart_off.push(n_cart);
+        n_sph += t.first().map_or(0, Vec::len);
+        n_cart += t.len();
+    }
+    let mut out = vec![0.0; n_cart * n_cart];
+    for (a, ta) in transforms.iter().enumerate() {
+        for (b, tb) in transforms.iter().enumerate() {
+            for (c, row_a) in ta.iter().enumerate() {
+                for (c2, row_b) in tb.iter().enumerate() {
+                    let mut s = 0.0;
+                    for (i, &ca) in row_a.iter().enumerate() {
+                        for (j, &cb) in row_b.iter().enumerate() {
+                            s += ca * m[(sph_off[a] + i) * nb + sph_off[b] + j] * cb;
+                        }
+                    }
+                    out[(cart_off[a] + c) * n_cart + cart_off[b] + c2] = s;
+                }
+            }
+        }
+    }
+    out
+}
+
 /// Derivatives of a two-centre matrix w.r.t. the centres of `a` and `b`:
 /// `[ax]` -> flat `[ia][ib]` tensors.
 fn d2(
@@ -155,10 +191,6 @@ pub fn rhf_gradient_with_basis(
     mol: &Molecule,
     basis: BasisSet,
 ) -> Result<(HfResult, Vec<Vec3>), HfError> {
-    if basis.is_spherical() {
-        // The derivative integrals are only written for Cartesian shells.
-        return Err(HfError::SphericalUnsupported);
-    }
     let res = rhf_with_basis(mol, basis)?;
     let nb = res.n_basis;
     let atoms: Vec<(u8, Vec3)> = mol
@@ -180,24 +212,28 @@ pub fn rhf_gradient_with_basis(
             owner.push(ia);
         }
     }
+    // The SCF works in spherical functions, but the derivative integrals are
+    // evaluated per Cartesian component. Density-type matrices are therefore
+    // pulled back to Cartesian components (`to_cartesian_space`), and all
+    // contractions below run over Cartesian components with `nc` components
+    // in total. For Cartesian shells this is the identity.
+    let transforms: Vec<Vec<Vec<f64>>> = shells.iter().map(spherical::transform).collect();
     let mut offsets = Vec::new();
-    let mut n = 0;
+    let mut nc = 0;
     for sh in &shells {
-        offsets.push(n);
-        n += n_cartesian(sh.l);
+        offsets.push(nc);
+        nc += n_cartesian(sh.l);
     }
-    debug_assert_eq!(n, nb);
 
-    let d = &res.density;
     let n_occ = {
         let ne: f64 = nuclei.iter().map(|&(z, _)| z).sum::<f64>() - f64::from(mol.formal_charge());
         (ne / 2.0).round() as usize
     };
     // Energy-weighted density W = 2 sum_occ eps_i C_mi C_ni.
-    let mut w = vec![0.0; nb * nb];
+    let mut w_sph = vec![0.0; nb * nb];
     for m in 0..nb {
         for k in 0..nb {
-            w[m * nb + k] = 2.0
+            w_sph[m * nb + k] = 2.0
                 * (0..n_occ)
                     .map(|i| {
                         res.orbital_energies[i]
@@ -207,6 +243,9 @@ pub fn rhf_gradient_with_basis(
                     .sum::<f64>();
         }
     }
+    let w = to_cartesian_space(&w_sph, nb, &transforms);
+    let d_cart = to_cartesian_space(&res.density, nb, &transforms);
+    let d = &d_cart;
 
     let mut grad = vec![Vec3::ZERO; na];
     let add = |grad: &mut Vec<Vec3>, atom: usize, ax: usize, v: f64| {
@@ -226,7 +265,7 @@ pub fn rhf_gradient_with_basis(
                 let mut s = 0.0;
                 for i in 0..dna {
                     for j in 0..dnb {
-                        s += dens[(oa + i) * nb + ob + j] * t[i * dnb + j];
+                        s += dens[(oa + i) * nc + ob + j] * t[i * dnb + j];
                     }
                 }
                 s
@@ -282,7 +321,7 @@ pub fn rhf_gradient_with_basis(
         })
         .collect();
     let gamma = |i: usize, j: usize, k: usize, l: usize| {
-        0.5 * (d[i * nb + j] * d[k * nb + l] - 0.5 * d[i * nb + k] * d[j * nb + l])
+        0.5 * (d[i * nc + j] * d[k * nc + l] - 0.5 * d[i * nc + k] * d[j * nc + l])
     };
     let gamma_sym = |i: usize, j: usize, k: usize, l: usize| {
         0.125

@@ -47,9 +47,6 @@ pub enum HfError {
     BasisTooLarge,
     /// A non-finite value appeared during the SCF (imploding geometry).
     NumericalBlowup,
-    /// The requested calculation is not implemented for spherical basis sets
-    /// (energies are; gradients are not).
-    SphericalUnsupported,
 }
 
 impl core::fmt::Display for HfError {
@@ -61,9 +58,6 @@ impl core::fmt::Display for HfError {
             HfError::NotConverged => write!(f, "SCF did not converge"),
             HfError::BasisTooLarge => write!(f, "basis exceeds the driver's function cap"),
             HfError::NumericalBlowup => write!(f, "non-finite value during SCF"),
-            HfError::SphericalUnsupported => {
-                write!(f, "gradients are not implemented for spherical basis sets")
-            }
         }
     }
 }
