@@ -12,9 +12,10 @@ use tpt_chem_core::units::angstrom_to_bohr;
 use tpt_chem_core::vec3::Vec3;
 
 use crate::basis::BasisSet;
-use crate::gaussian::cartesian_components;
+use crate::gaussian::n_cartesian;
 use crate::integrals::{eri_shell, kinetic_shell, nuclear_repulsion, nuclear_shell, overlap_shell};
 use crate::linalg::{jacobi_eigh, mat_mul, transpose};
+use crate::spherical::{self, contract_axis, transform_block};
 
 /// Closed-shell density matrix `D = 2·Σ_occ C_io C_jo` (row-major).
 ///
@@ -46,6 +47,9 @@ pub enum HfError {
     BasisTooLarge,
     /// A non-finite value appeared during the SCF (imploding geometry).
     NumericalBlowup,
+    /// The requested calculation is not implemented for spherical basis sets
+    /// (energies are; gradients are not).
+    SphericalUnsupported,
 }
 
 impl core::fmt::Display for HfError {
@@ -57,6 +61,9 @@ impl core::fmt::Display for HfError {
             HfError::NotConverged => write!(f, "SCF did not converge"),
             HfError::BasisTooLarge => write!(f, "basis exceeds the driver's function cap"),
             HfError::NumericalBlowup => write!(f, "non-finite value during SCF"),
+            HfError::SphericalUnsupported => {
+                write!(f, "gradients are not implemented for spherical basis sets")
+            }
         }
     }
 }
@@ -215,54 +222,57 @@ pub(crate) fn scf_setup(mol: &Molecule, basis: BasisSet) -> Result<ScfSetup, HfE
         .atoms()
         .map(|a| (a.z, a.pos * angstrom_to_bohr(1.0)))
         .collect();
-    if atoms.iter().any(|&(z, _)| z > 10) {
-        return Err(HfError::UnsupportedElement);
-    }
+    // Element coverage is the basis set's business: a basis that does not
+    // cover an element returns `UnsupportedElement` from `basis.build`.
     let nuclei: Vec<(f64, Vec3)> = atoms.iter().map(|&(z, r)| (f64::from(z), r)).collect();
     let shells = basis
         .build(&atoms)
         .map_err(|_| HfError::UnsupportedElement)?;
 
-    // Basis-function offsets per shell.
-    let mut offsets = Vec::new();
+    // Basis functions per shell: Cartesian components, or 2l+1 spherical
+    // harmonics for spherical shells. `transforms[a][c][m]` maps Cartesian
+    // component `c` of shell `a` to function `m`.
+    let ns = shells.len();
+    let transforms: Vec<Vec<Vec<f64>>> = shells.iter().map(spherical::transform).collect();
+    let mut offsets = Vec::with_capacity(ns);
     let mut nb = 0usize;
-    for sh in &shells {
+    for t in &transforms {
         offsets.push(nb);
-        nb += cartesian_components(sh.l).len();
+        nb += t.first().map_or(0, Vec::len);
     }
     if nb > MAX_BASIS {
         return Err(HfError::BasisTooLarge);
     }
-    let shell_of = |bf: usize| -> usize {
-        offsets
-            .iter()
-            .rposition(|&o| o <= bf)
-            .expect("bf within shells")
-    };
 
-    // One-electron matrices.
+    // One-electron matrices, one shell pair at a time: integrate in Cartesian
+    // components, then transform to the basis functions.
     let mut s = vec![0.0; nb * nb];
     let mut h_core = vec![0.0; nb * nb];
-    for i in 0..nb {
-        let si = &shells[shell_of(i)];
-        let ci = i - offsets[shell_of(i)];
-        for j in 0..nb {
-            let sj = &shells[shell_of(j)];
-            let cj = j - offsets[shell_of(j)];
-            let ov = overlap_shell(si, sj);
-            let k = ov[ci][cj];
-            s[i * nb + j] = k;
-            let t = kinetic_shell(si, sj)[ci][cj];
-            let v = nuclear_shell(si, sj, &nuclei)[ci][cj];
-            h_core[i * nb + j] = t + v;
+    for a in 0..ns {
+        for b in 0..ns {
+            let ov = overlap_shell(&shells[a], &shells[b]);
+            let kin = kinetic_shell(&shells[a], &shells[b]);
+            let vnuc = nuclear_shell(&shells[a], &shells[b], &nuclei);
+            let hcart: Vec<Vec<f64>> = kin
+                .iter()
+                .zip(&vnuc)
+                .map(|(kr, vr)| kr.iter().zip(vr).map(|(k, v)| k + v).collect())
+                .collect();
+            let s_ab = transform_block(&ov, &transforms[a], &transforms[b]);
+            let h_ab = transform_block(&hcart, &transforms[a], &transforms[b]);
+            for (m, (srow, hrow)) in s_ab.iter().zip(&h_ab).enumerate() {
+                for (n, (&sv, &hv)) in srow.iter().zip(hrow).enumerate() {
+                    let (i, j) = (offsets[a] + m, offsets[b] + n);
+                    s[i * nb + j] = sv;
+                    h_core[i * nb + j] = hv;
+                }
+            }
         }
     }
 
     // Two-electron integrals: Schwarz-screened packed shell quartets. The
     // full basis-function tensor `(μν|λσ)` is never materialized; the Fock
     // build consumes the quartets directly.
-    let ns = shells.len();
-    let comps: Vec<Vec<(u8, u8, u8)>> = shells.iter().map(|s| cartesian_components(s.l)).collect();
     let mut schwarz = vec![0.0f64; ns * ns];
     for a in 0..ns {
         for b in 0..ns {
@@ -298,11 +308,11 @@ pub(crate) fn scf_setup(mol: &Molecule, basis: BasisSet) -> Result<ScfSetup, HfE
     }
     let pack = |&[a, b, c, d]: &[usize; 4]| {
         let v = eri_shell(&shells[a], &shells[b], &shells[c], &shells[d]);
-        let dims = [
-            comps[a].len(),
-            comps[b].len(),
-            comps[c].len(),
-            comps[d].len(),
+        let mut dims = [
+            n_cartesian(shells[a].l),
+            n_cartesian(shells[b].l),
+            n_cartesian(shells[c].l),
+            n_cartesian(shells[d].l),
         ];
         let mut flat = Vec::with_capacity(dims[0] * dims[1] * dims[2] * dims[3]);
         for row in &v {
@@ -312,6 +322,14 @@ pub(crate) fn scf_setup(mol: &Molecule, basis: BasisSet) -> Result<ScfSetup, HfE
                         flat.push(*x);
                     }
                 }
+            }
+        }
+        // Contract every spherical axis; Cartesian axes are already right.
+        for (axis, &shell) in [a, b, c, d].iter().enumerate() {
+            if shells[shell].spherical {
+                let (next, next_dims) = contract_axis(&flat, dims, axis, &transforms[shell]);
+                flat = next;
+                dims = next_dims;
             }
         }
         PackedQuartet {

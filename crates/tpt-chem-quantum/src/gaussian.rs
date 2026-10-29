@@ -71,6 +71,9 @@ pub struct Shell {
     /// Per-Cartesian-component renormalization factors, computed by
     /// [`Shell::normalize`]. Empty until normalized.
     pub normalizations: Vec<f64>,
+    /// Whether the shell uses spherical harmonics (2l+1 functions) instead of
+    /// its Cartesian components. Only d shells (`l = 2`) are supported.
+    pub spherical: bool,
 }
 
 impl Shell {
@@ -83,7 +86,14 @@ impl Shell {
             center,
             primitives,
             normalizations: vec![1.0; n],
+            spherical: false,
         }
+    }
+
+    /// The same shell, using spherical harmonics.
+    pub fn with_spherical(mut self) -> Self {
+        self.spherical = true;
+        self
     }
 
     /// Renormalize each contracted Cartesian component to unit self-overlap.

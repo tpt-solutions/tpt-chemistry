@@ -20,7 +20,7 @@ use tpt_chem_core::molecule::Molecule;
 use tpt_chem_core::units::angstrom_to_bohr;
 use tpt_chem_core::vec3::Vec3;
 
-use crate::gaussian::{cartesian_components, n_cartesian, primitive_normalization, Shell};
+use crate::gaussian::{cartesian_components, primitive_normalization, Shell};
 
 /// Axis-aligned grid of points, in Bohr.
 #[derive(Debug, Clone, PartialEq)]
@@ -90,11 +90,11 @@ impl CubeGrid {
     }
 }
 
-/// Values of every contracted Cartesian Gaussian at `r` (Bohr), in the
-/// basis-function order the SCF uses (shell by shell, components in
-/// [`cartesian_components`] order).
+/// Values of every basis function at `r` (Bohr), in the basis-function order
+/// the SCF uses: shell by shell, with Cartesian components in
+/// [`cartesian_components`] order and spherical shells in their harmonic order.
 pub fn ao_values(shells: &[Shell], r: Vec3) -> Vec<f64> {
-    let mut out = Vec::with_capacity(shells.iter().map(|s| n_cartesian(s.l)).sum());
+    let mut out = Vec::new();
     for sh in shells {
         let d = r - sh.center;
         let r2 = d.norm_sq();
@@ -103,16 +103,33 @@ pub fn ao_values(shells: &[Shell], r: Vec3) -> Vec<f64> {
             .iter()
             .map(|&(alpha, c)| (c, (-alpha * r2).exp()))
             .collect();
-        for (ic, &comp) in cartesian_components(sh.l).iter().enumerate() {
-            let poly = d.x.powi(i32::from(comp.0))
-                * d.y.powi(i32::from(comp.1))
-                * d.z.powi(i32::from(comp.2));
-            let mut value = 0.0;
-            for (p, &(c, e)) in sh.primitives.iter().zip(&radial) {
-                let norm = sh.normalizations[ic] * primitive_normalization(p.0, comp);
-                value += c * norm * e;
-            }
-            out.push(poly * value);
+        let cart: Vec<f64> = cartesian_components(sh.l)
+            .iter()
+            .enumerate()
+            .map(|(ic, &comp)| {
+                let poly = d.x.powi(i32::from(comp.0))
+                    * d.y.powi(i32::from(comp.1))
+                    * d.z.powi(i32::from(comp.2));
+                let mut value = 0.0;
+                for (p, &(c, e)) in sh.primitives.iter().zip(&radial) {
+                    let norm = sh.normalizations[ic] * primitive_normalization(p.0, comp);
+                    value += c * norm * e;
+                }
+                poly * value
+            })
+            .collect();
+        if sh.spherical {
+            // Each harmonic is a fixed combination of the Cartesian values.
+            let t = crate::spherical::transform(sh);
+            let n_functions = t.first().map_or(0, Vec::len);
+            out.extend((0..n_functions).map(|m| {
+                cart.iter()
+                    .enumerate()
+                    .map(|(c, v)| t[c][m] * v)
+                    .sum::<f64>()
+            }));
+        } else {
+            out.extend(cart);
         }
     }
     out

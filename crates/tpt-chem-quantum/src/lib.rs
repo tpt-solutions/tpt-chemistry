@@ -42,6 +42,7 @@ pub mod hf;
 pub mod integrals;
 pub mod linalg;
 pub mod molden;
+mod spherical;
 pub mod uhf;
 
 /// Common imports for Hartree–Fock calculations.

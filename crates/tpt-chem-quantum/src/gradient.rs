@@ -155,6 +155,10 @@ pub fn rhf_gradient_with_basis(
     mol: &Molecule,
     basis: BasisSet,
 ) -> Result<(HfResult, Vec<Vec3>), HfError> {
+    if basis.is_spherical() {
+        // The derivative integrals are only written for Cartesian shells.
+        return Err(HfError::SphericalUnsupported);
+    }
     let res = rhf_with_basis(mol, basis)?;
     let nb = res.n_basis;
     let atoms: Vec<(u8, Vec3)> = mol

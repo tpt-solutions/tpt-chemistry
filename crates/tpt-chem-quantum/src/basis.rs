@@ -139,6 +139,75 @@ pub fn pople_631g_shells(z: u8, center: Vec3) -> Result<Vec<Shell>, BasisError> 
         .collect())
 }
 
+/// cc-pVDZ data for H–Ar, generated from Basis Set Exchange by
+/// `tools/gen_cc_pvdz.py`.
+const CC_PVDZ_DATA: &str = include_str!("../data/cc-pvdz.txt");
+
+/// A shell read from the cc-pVDZ data: `(l, spherical, primitives)`.
+type ParsedShell = (u8, bool, Vec<(f64, f64)>);
+
+/// cc-pVDZ shells for element `z` (H–Ar) at `center` (Bohr). d shells are
+/// spherical (five functions), the rest are Cartesian.
+///
+/// # Errors
+/// [`BasisError::UnsupportedElement`] outside H–Ar.
+pub fn cc_pvdz_shells(z: u8, center: Vec3) -> Result<Vec<Shell>, BasisError> {
+    let unsupported = BasisError::UnsupportedElement(z);
+    if z == 0 || z > 18 {
+        return Err(unsupported);
+    }
+    // (l, spherical, primitives) for each shell of this element.
+    let mut parsed: Vec<ParsedShell> = Vec::new();
+    let mut inside = false;
+    for line in CC_PVDZ_DATA.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if let Some(element) = line.strip_prefix("@ ") {
+            if inside {
+                break;
+            }
+            inside = element.trim() == z.to_string();
+            continue;
+        }
+        if !inside {
+            continue;
+        }
+        if let Some(header) = line.strip_prefix("shell ") {
+            let mut fields = header.split_whitespace();
+            let l = fields.next().and_then(|x| x.parse::<u8>().ok());
+            let sph = fields.next().and_then(|x| x.parse::<u8>().ok());
+            match (l, sph) {
+                (Some(l), Some(sph)) => parsed.push((l, sph == 1, Vec::new())),
+                _ => return Err(unsupported),
+            }
+        } else {
+            let mut fields = line.split_whitespace();
+            let alpha = fields.next().and_then(|x| x.parse::<f64>().ok());
+            let coef = fields.next().and_then(|x| x.parse::<f64>().ok());
+            match (alpha, coef, parsed.last_mut()) {
+                (Some(a), Some(c), Some(shell)) => shell.2.push((a, c)),
+                _ => return Err(unsupported),
+            }
+        }
+    }
+    if parsed.is_empty() {
+        return Err(unsupported);
+    }
+    Ok(parsed
+        .into_iter()
+        .map(|(l, sph, prims)| {
+            let mut sh = Shell::new(l, center, prims);
+            if sph {
+                sh = sh.with_spherical();
+            }
+            sh.normalize();
+            sh
+        })
+        .collect())
+}
+
 /// Available Gaussian basis sets.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum BasisSet {
@@ -147,6 +216,9 @@ pub enum BasisSet {
     Sto3g,
     /// Split-valence 6-31G (H–Ne); Cartesian s and p functions only.
     Pople631g,
+    /// Dunning cc-pVDZ (H–Ne), with spherical d functions. Energies only:
+    /// gradients, cube and Molden output are not implemented for it yet.
+    CcPvdz,
 }
 
 impl BasisSet {
@@ -158,7 +230,13 @@ impl BasisSet {
         match self {
             BasisSet::Sto3g => sto3g_shells(z, center),
             BasisSet::Pople631g => pople_631g_shells(z, center),
+            BasisSet::CcPvdz => cc_pvdz_shells(z, center),
         }
+    }
+
+    /// Whether any shell of this basis uses spherical harmonics.
+    pub fn is_spherical(self) -> bool {
+        matches!(self, BasisSet::CcPvdz)
     }
 
     /// Shells for a whole geometry (`(Z, position in Bohr)`), atom by atom.
