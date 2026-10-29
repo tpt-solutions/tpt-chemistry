@@ -36,9 +36,27 @@ impl VelocityVerlet {
     /// Returns the potential energy after the step (kJ·mol⁻¹); the forces
     /// stored on the system are the fresh `F(t+Δt)`.
     pub fn step(&self, sys: &mut System, cutoff: Option<f64>) -> f64 {
+        self.step_with(sys, |s| {
+            s.with_bonded(crate::forces::forces_all_pairs(s, s.box_, cutoff))
+        })
+    }
+
+    /// Advance the system by one step with an arbitrary force model.
+    ///
+    /// `forces` maps the current system to `(forces, potential energy)` in
+    /// kJ·mol⁻¹·Å⁻¹ and kJ·mol⁻¹, the same convention as [`System::force`].
+    /// The Verlet update is identical to [`VelocityVerlet::step`], so any
+    /// model whose forces are the exact gradient of its energy conserves
+    /// energy under this integrator.
+    ///
+    /// Returns the potential energy after the step (kJ·mol⁻¹).
+    pub fn step_with<F>(&self, sys: &mut System, mut forces: F) -> f64
+    where
+        F: FnMut(&System) -> (Vec<Vec3>, f64),
+    {
         let dt = self.dt;
         if sys.force.iter().all(|f| *f == Vec3::ZERO) && sys.potential_energy == 0.0 {
-            let (f, e) = sys.with_bonded(crate::forces::forces_all_pairs(sys, sys.box_, cutoff));
+            let (f, e) = forces(sys);
             sys.force = f;
             sys.potential_energy = e;
         }
@@ -52,7 +70,7 @@ impl VelocityVerlet {
                 *p = b.wrap(*p);
             }
         }
-        let (f, e) = sys.with_bonded(crate::forces::forces_all_pairs(sys, sys.box_, cutoff));
+        let (f, e) = forces(sys);
         sys.force = f;
         sys.potential_energy = e;
         for i in 0..sys.len() {

@@ -13,6 +13,7 @@
 //! [`crate::pme`] solver, which reproduces this sum to the spline
 //! discretization error while scaling as O(N log N).
 
+use tpt_chem_core::num;
 use tpt_chem_core::special;
 use tpt_chem_core::units::COULOMB_PREFACTOR_KJ_ANG;
 use tpt_chem_core::vec3::Vec3;
@@ -31,15 +32,22 @@ pub struct EwaldParams {
 }
 
 impl EwaldParams {
-    /// Heuristic parameters for a cubic box of edge `L` with `n` charges:
-    /// α = √π (σ ≈ 1 Å) and cutoffs chosen for ~1e-8 convergence.
+    /// Parameters that converge the sum to about 1e-8 for a box of smallest
+    /// edge `L`.
+    ///
+    /// Both truncated tails fall off as `exp(−σ²)`, with `σ = √(−ln 10⁻⁸)`.
+    /// The real-space cutoff is `r_c = L/2`, so `erfc(α r_c) ≈ 10⁻⁸` needs
+    /// `α = σ / r_c`. The reciprocal tail `exp(−g²/4α²)` then needs
+    /// `g_max = 2ασ`.
     pub fn heuristic(box_: &Box3) -> Self {
         let l = box_.length.x.min(box_.length.y).min(box_.length.z);
-        let alpha = core::f64::consts::PI.sqrt() / l * 2.0;
+        let sigma = num::sqrt(-num::ln(1e-8));
+        let r_cutoff = l / 2.0;
+        let alpha = sigma / r_cutoff;
         EwaldParams {
             alpha,
-            r_cutoff: l / 2.0,
-            g_max: 6.0 * alpha,
+            r_cutoff,
+            g_max: 2.0 * alpha * sigma,
         }
     }
 }

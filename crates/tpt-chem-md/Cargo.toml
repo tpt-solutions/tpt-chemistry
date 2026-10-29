@@ -19,6 +19,7 @@ serde = ["dep:serde", "tpt-chem-core/serde"]
 rayon = ["dep:rayon"]
 
 [dev-dependencies]
+criterion = { workspace = true }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 
 [dependencies]
@@ -31,3 +32,7 @@ rayon = { workspace = true, optional = true }
 
 [lints]
 workspace = true
+
+[[bench]]
+name = "force_kernels"
+harness = false
