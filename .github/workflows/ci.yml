@@ -100,7 +100,7 @@ jobs:
         with:
           repository: tpt-solutions/tpt-math
           path: tpt-math
-      - uses: dtolnay/rust-toolchain@1.88
+      - uses: dtolnay/rust-toolchain@1.120
       - run: cargo check --workspace --all-targets
         working-directory: tpt-chemistry
 
