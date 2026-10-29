@@ -563,7 +563,10 @@ usability/automation, and adoption work. Ordered roughly by priority.*
       1e-9 (`tpt-chem-md/tests/autodiff_forces.rs`). Reverse mode is in `tpt-chem-core/src/autodiff_reverse.rs` (tape-based, `std` feature only: one
       forward and one backward pass for any number of inputs; checked against forward mode on a
       200-input function). `AmberModel::energy_forces` now uses it (one backward pass for all forces), with forward mode kept as
-      `energy_forces_forward` and cross-checked on all OPLS molecules. The MD `ForceModel` path is not yet wired in
+      `energy_forces_forward` and cross-checked on all OPLS molecules. In the MD `ForceModel`, bonded terms also have a reverse-mode path (`bonded::bonded_energy_forces_ad`,
+      cross-checked against the analytic kernels). It is not the default: it measured about 19× slower on a
+      3000-term chain (`bonded_timing`), so the analytic kernels stay in the MD path. The nonbonded pair
+      kernels stay hand-written, since a tape per pair would be slower still
 - [x] Independent checks against OpenMM: isolated LJ + Coulomb (relative 1e-6), periodic Ewald
       against OpenMM PME (1e-3 kJ/mol), and the AMBER model on N-methylacetamide (1e-3 kJ/mol).
       These found a bug: the Ewald heuristic was under-converged (α·r_c ≈ 1.77, about 0.6% low in
