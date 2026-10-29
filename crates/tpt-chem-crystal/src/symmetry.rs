@@ -56,9 +56,15 @@ impl SymmetryOp {
     }
 }
 
+/// Operations of all 230 space groups in their standard settings, generated
+/// by `tools/gen_spacegroups.py` from the spglib database.
+const SPACEGROUP_DATA: &str = include_str!("../data/spacegroups.txt");
+
 /// A named space group: identity plus its operations.
 #[derive(Clone, Debug)]
 pub struct SpaceGroup {
+    /// International Tables number (1–230), when known.
+    pub number: Option<u16>,
     /// Hermann-Mauguin symbol.
     pub symbol: String,
     /// Full operation set (includes the identity).
@@ -66,155 +72,70 @@ pub struct SpaceGroup {
 }
 
 impl SpaceGroup {
-    /// The operations of one of the 11 included space groups by
-    /// Hermann-Mauguin symbol. `None` for groups outside the table.
-    pub fn by_symbol(symbol: &str) -> Option<SpaceGroup> {
-        let ops = match symbol {
-            "P1" => vec![SymmetryOp::identity()],
-            "P-1" => vec![SymmetryOp::identity(), SymmetryOp::inversion([0.0; 3])],
-            "P21" => {
-                // 2₁ screw along b: (x, y+½, −z).
-                vec![
-                    SymmetryOp::identity(),
-                    SymmetryOp {
-                        r: [[1, 0, 0], [0, 1, 0], [0, 0, -1]],
-                        t: [0.0, 0.5, 0.0],
-                    },
-                ]
+    /// The standard-setting space group with International Tables number
+    /// `number` (1–230), with all of its general-position operations.
+    ///
+    /// Covers all 230 groups. The operations come from the generated table
+    /// in `data/spacegroups.txt`. `None` for numbers outside 1–230.
+    pub fn from_number(number: u16) -> Option<SpaceGroup> {
+        let mut symbol = None;
+        let mut operations = Vec::new();
+        let mut in_group = false;
+        for line in SPACEGROUP_DATA.lines() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
             }
-            "P21/c" => {
-                // Standard setting: (x,y,z), (−x, y+½, −z+½), (−x,−y,−z), (x, −y+½, z+½).
-                vec![
-                    SymmetryOp::identity(),
-                    SymmetryOp {
-                        r: [[-1, 0, 0], [0, 1, 0], [0, 0, -1]],
-                        t: [0.0, 0.5, 0.5],
-                    },
-                    SymmetryOp::inversion([0.0; 3]),
-                    SymmetryOp {
-                        r: [[1, 0, 0], [0, -1, 0], [0, 0, 1]],
-                        t: [0.0, 0.5, 0.5],
-                    },
-                ]
-            }
-            "P212121" => {
-                // 2₁ screws along a, b, c.
-                vec![
-                    SymmetryOp::identity(),
-                    SymmetryOp {
-                        r: [[-1, 0, 0], [0, -1, 0], [0, 0, 1]],
-                        t: [0.5, 0.5, 0.0],
-                    },
-                    SymmetryOp {
-                        r: [[-1, 0, 0], [0, 1, 0], [0, 0, -1]],
-                        t: [0.5, 0.0, 0.5],
-                    },
-                    SymmetryOp {
-                        r: [[1, 0, 0], [0, -1, 0], [0, 0, -1]],
-                        t: [0.0, 0.5, 0.5],
-                    },
-                ]
-            }
-            "Pna21" => {
-                // n-glide ⊥ a, a-glide ⊥ b, 2₁ along c (origin choice 1 simplified):
-                // standard operations for Pna2₁.
-                vec![
-                    SymmetryOp::identity(),
-                    SymmetryOp {
-                        r: [[-1, 0, 0], [0, -1, 0], [0, 0, 1]],
-                        t: [0.0, 0.0, 0.5],
-                    },
-                    SymmetryOp {
-                        r: [[1, 0, 0], [0, -1, 0], [0, 0, 1]],
-                        t: [0.5, 0.5, 0.5],
-                    },
-                    SymmetryOp {
-                        r: [[-1, 0, 0], [0, 1, 0], [0, 0, 1]],
-                        t: [0.5, 0.5, 0.0],
-                    },
-                ]
-            }
-            "P4" => {
-                // 4-fold rotation about c: (x,y,z), (−y,x,z), (−x,−y,z), (y,−x,z).
-                let r90 = |s: i32| SymmetryOp {
-                    r: [[0, -s, 0], [s, 0, 0], [0, 0, 1]],
-                    t: [0.0; 3],
-                };
-                vec![
-                    SymmetryOp::identity(),
-                    r90(1),
-                    SymmetryOp {
-                        r: [[-1, 0, 0], [0, -1, 0], [0, 0, 1]],
-                        t: [0.0; 3],
-                    },
-                    r90(-1),
-                ]
-            }
-            "P-3" => vec![
-                SymmetryOp::identity(),
-                SymmetryOp {
-                    r: [[0, -1, 0], [1, -1, 0], [0, 0, 1]],
-                    t: [0.0; 3],
-                },
-                SymmetryOp {
-                    r: [[-1, 1, 0], [-1, 0, 0], [0, 0, 1]],
-                    t: [0.0; 3],
-                },
-                SymmetryOp::inversion([0.0; 3]),
-                SymmetryOp {
-                    r: [[0, 1, 0], [1, 1, 0], [0, 0, -1]],
-                    t: [0.0; 3],
-                },
-                SymmetryOp {
-                    r: [[1, -1, 0], [1, 0, 0], [0, 0, -1]],
-                    t: [0.0; 3],
-                },
-            ],
-            "P6/mmm" => {
-                // 6/m m m: 6-fold rotations + inversion × 12 operations.
-                let mut ops = vec![SymmetryOp::identity()];
-                // Hexagonal rotations about c (60° steps, hexagonal axes).
-                let rot60 = SymmetryOp {
-                    r: [[1, -1, 0], [1, 0, 0], [0, 0, 1]],
-                    t: [0.0; 3],
-                };
-                let mut cur = SymmetryOp::identity();
-                for _ in 0..5 {
-                    cur = compose(&rot60, &cur);
-                    ops.push(cur.clone());
+            if let Some(header) = line.strip_prefix("@ ") {
+                if in_group {
+                    break;
                 }
-                // Inversion × all.
-                let inv_ops = ops.clone();
-                for op in inv_ops {
-                    ops.push(compose(&SymmetryOp::inversion([0.0; 3]), &op));
+                // "@ <number> <hall> <Hermann-Mauguin>"; underscores mark subscripts.
+                let mut fields = header.splitn(3, ' ');
+                let n: u16 = fields.next()?.parse().ok()?;
+                let _hall = fields.next()?;
+                if n == number {
+                    in_group = true;
+                    symbol = Some(fields.next()?.replace('_', ""));
                 }
-                ops
+                continue;
             }
-            "Fm-3m" => {
-                // F m -3 m: 48 point operations × F-centering translations.
-                let point_ops = cubic_point_ops();
-                let mut ops = Vec::new();
-                for op in &point_ops {
-                    for &ct in &[
-                        [0.0, 0.0, 0.0],
-                        [0.0, 0.5, 0.5],
-                        [0.5, 0.0, 0.5],
-                        [0.5, 0.5, 0.0],
-                    ] {
-                        ops.push(SymmetryOp {
-                            r: op.r,
-                            t: [op.t[0] + ct[0], op.t[1] + ct[1], op.t[2] + ct[2]],
-                        });
-                    }
-                }
-                ops
+            if !in_group {
+                continue;
             }
-            _ => return None,
-        };
+            let v: Vec<i64> = line
+                .split_whitespace()
+                .map(|x| x.parse().ok())
+                .collect::<Option<_>>()?;
+            if v.len() != 12 {
+                return None;
+            }
+            let r = [
+                [v[0] as i32, v[1] as i32, v[2] as i32],
+                [v[3] as i32, v[4] as i32, v[5] as i32],
+                [v[6] as i32, v[7] as i32, v[8] as i32],
+            ];
+            let t = [v[9] as f64 / 12.0, v[10] as f64 / 12.0, v[11] as f64 / 12.0];
+            operations.push(SymmetryOp { r, t });
+        }
         Some(SpaceGroup {
-            symbol: symbol.into(),
-            operations: ops,
+            number: Some(number),
+            symbol: symbol?,
+            operations,
         })
+    }
+
+    /// The operations of a space group by Hermann-Mauguin symbol, for the
+    /// standard settings of the groups that have a common short symbol
+    /// (`P1`, `P-1`, `P21`, `P21/c`, `P212121`, `Pna21`, `P4`, `P-3`,
+    /// `P6/mmm`, `Fm-3m`). These come from the generated table, so they match
+    /// [`SpaceGroup::from_number`]. `None` for other symbols; use
+    /// `from_number` for all 230 groups.
+    pub fn by_symbol(symbol: &str) -> Option<SpaceGroup> {
+        let number = standard_number(symbol)?;
+        let mut group = SpaceGroup::from_number(number)?;
+        group.symbol = symbol.into();
+        Some(group)
     }
 
     /// The orbit of a fractional position: every symmetry image reduced
@@ -236,6 +157,23 @@ impl SpaceGroup {
     }
 }
 
+/// International Tables number of one of the groups in [`SpaceGroup::by_symbol`].
+fn standard_number(symbol: &str) -> Option<u16> {
+    Some(match symbol {
+        "P1" => 1,
+        "P-1" => 2,
+        "P21" => 4,
+        "P21/c" => 14,
+        "P212121" => 19,
+        "Pna21" => 33,
+        "P4" => 75,
+        "P-3" => 147,
+        "P6/mmm" => 191,
+        "Fm-3m" => 225,
+        _ => return None,
+    })
+}
+
 /// Compose two symmetry operations: `(op2 ∘ op1)(x) = op2(op1(x))`.
 pub fn compose(op2: &SymmetryOp, op1: &SymmetryOp) -> SymmetryOp {
     let mut r = [[0i32; 3]; 3];
@@ -255,37 +193,6 @@ pub fn compose(op2: &SymmetryOp, op1: &SymmetryOp) -> SymmetryOp {
         *ti -= ti.floor();
     }
     SymmetryOp { r, t }
-}
-
-/// The 48 cubic point-group operations (m-3m point part, translations zero).
-fn cubic_point_ops() -> Vec<SymmetryOp> {
-    // All 3×3 signed permutation matrices with det = ±1: 48 operations.
-    fn permute(perm: &mut [usize; 3], k: usize, signs: &[i32; 3], ops: &mut Vec<SymmetryOp>) {
-        if k == 3 {
-            let mut r = [[0i32; 3]; 3];
-            for (row, &col) in perm.iter().enumerate() {
-                r[row][col] = signs[row];
-            }
-            ops.push(SymmetryOp { r, t: [0.0; 3] });
-            return;
-        }
-        for kk in 0..3 {
-            if !perm[..k].contains(&kk) {
-                perm[k] = kk;
-                permute(perm, k + 1, signs, ops);
-            }
-        }
-    }
-    let mut ops = Vec::new();
-    let mut signs = [1i32; 3];
-    // Iterate all 8 sign combinations.
-    for mask in 0..8usize {
-        for (row, s) in signs.iter_mut().enumerate() {
-            *s = if (mask >> row) & 1 == 0 { 1 } else { -1 };
-        }
-        permute(&mut [0usize; 3], 0, &signs, &mut ops);
-    }
-    ops
 }
 
 #[cfg(test)]
@@ -318,8 +225,8 @@ mod tests {
         let orbit = g.orbit([0.1, 0.2, 0.3], 1e-6);
         assert_eq!(orbit.len(), 2);
         let other = orbit.iter().find(|p| **p != [0.1, 0.2, 0.3]).unwrap();
-        // (x, y+½, −z): x stays 0.1, y = 0.7, z = 0.7.
-        assert!((other[0] - 0.1).abs() < 1e-10);
+        // (−x, y+½, −z): x → −0.1 ≡ 0.9, y = 0.7, z = 0.7.
+        assert!((other[0] - 0.9).abs() < 1e-10);
         assert!((other[1] - 0.7).abs() < 1e-10);
         assert!((other[2] - 0.7).abs() < 1e-10);
     }
@@ -341,10 +248,12 @@ mod tests {
     }
 
     #[test]
-    fn cubic_point_ops_count() {
-        // m-3m point group: 48 operations.
-        let ops = cubic_point_ops();
+    fn cubic_point_group_from_table() {
+        // Pm-3m (221) is primitive, so its operations are the m-3m point group
+        // itself: 48 operations with no translations.
+        let ops = SpaceGroup::from_number(221).unwrap().operations;
         assert_eq!(ops.len(), 48);
+        assert!(ops.iter().all(|op| op.t == [0.0; 3]));
         // All are orthogonal: each row has exactly one ±1.
         for op in &ops {
             for row in op.r {
@@ -364,11 +273,12 @@ mod tests {
     }
 
     #[test]
-    fn p6mmm_orbit_12() {
+    fn p6mmm_orbit_24() {
+        // 6/mmm has point-group order 24 and P6/mmm is primitive.
         let g = SpaceGroup::by_symbol("P6/mmm").unwrap();
-        assert_eq!(g.operations.len(), 12);
+        assert_eq!(g.operations.len(), 24);
         let orbit = g.orbit([0.13, 0.29, 0.41], 1e-6);
-        assert_eq!(orbit.len(), 12);
+        assert_eq!(orbit.len(), 24);
     }
 
     #[test]
