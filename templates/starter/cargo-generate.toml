@@ -1,0 +1,8 @@
+# cargo-generate template: `cargo generate --path templates/starter`
+# The umbrella crate is not published yet, so the generated project points at a
+# local checkout. Keep the sibling `tpt-math` checkout next to this repository.
+
+[placeholders.tpt_chemistry_path]
+type = "string"
+prompt = "Path to the tpt-chemistry umbrella crate (crates/tpt-chemistry)"
+default = "../tpt-chemistry/crates/tpt-chemistry"

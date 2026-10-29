@@ -1,5 +1,8 @@
 # tpt-chemistry
 
+[![CI](https://github.com/tpt-solutions/tpt-chemistry/actions/workflows/ci.yml/badge.svg)](https://github.com/tpt-solutions/tpt-chemistry/actions/workflows/ci.yml)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
+
 A pure-Rust, AI-native computational chemistry and molecular simulation
 library: molecular dynamics (MD), quantum chemistry primitives
 (Hartree–Fock with Gaussian basis sets), reaction kinetics, and
@@ -68,14 +71,47 @@ CI performs the same sibling checkout in every job (see
 | Crate | Purpose |
 |---|---|
 | [`tpt-chem-core`](crates/tpt-chem-core) | Molecular graphs, force fields, physical constants, unit-safe types |
-| [`tpt-chem-md`](crates/tpt-chem-md) | Integrators, thermostats/barostat, cell/neighbor lists, Ewald + PME (in-house FFT), virial/pressure, NVE/NVT/NPT run loops, energy minimisation |
+| [`tpt-chem-md`](crates/tpt-chem-md) | Integrators, thermostats/barostat, cell/neighbor lists, Ewald + PME (in-house FFT), virial/pressure, NVE/NVT/NPT run loops, SHAKE/RATTLE, steepest descent and L-BFGS minimisation, a radial machine-learned potential |
 | [`tpt-chem-quantum`](crates/tpt-chem-quantum) | Gaussian basis sets, McMurchie–Davidson ERIs, SCF / Hartree–Fock (charged species), Molden orbital output |
 | [`tpt-chem-kinetics`](crates/tpt-chem-kinetics) | Mass-action ODEs, Gillespie SSA, Arrhenius/Eyring rates |
 | [`tpt-chem-aqueous`](crates/tpt-chem-aqueous) | Activity coefficients (Debye–Hückel, Davies, Pitzer, eNRTL), Ksp/saturation indices, chelator-controlled calcium phosphate precipitation onset |
 | [`tpt-chem-crystal`](crates/tpt-chem-crystal) | Bravais lattices, space groups, reciprocal space, XRD simulation |
-| [`tpt-chem-io`](crates/tpt-chem-io) | XYZ, PDB, MOL2, CIF readers/writers, trajectory streaming |
+| [`tpt-chem-io`](crates/tpt-chem-io) | XYZ, PDB, MOL2, SDF, CIF, GRO readers/writers; SMILES reader and canonical writer; Gaussian input/output; trajectory streaming |
 | [`tpt-chem-verify`](crates/tpt-chem-verify) | proptest strategies, conservation-law checks, Kani harnesses |
 | [`tpt-chemistry`](crates/tpt-chemistry) | Feature-gated umbrella crate re-exporting all of the above |
+| [`tpt-chem-wasm`](crates/tpt-chem-wasm) | WebAssembly bindings and a browser demo (not published) |
+| [`tpt-chem-py`](crates/tpt-chem-py) | Python bindings built with maturin (outside the workspace, not published) |
+
+## Interfaces
+
+- **Rust:** the umbrella crate, or any `tpt-chem-*` crate directly.
+- **Python:** `crates/tpt-chem-py`, built with `maturin build`.
+- **Browser and Node:** `crates/tpt-chem-wasm`, built with `wasm-pack`.
+- **Starter project:** `cargo generate --path templates/starter`.
+- **Documentation:** the mdBook in [`book/`](book/) (`mdbook build book`).
+
+## Status and limits
+
+Working today: the MD engine (Ewald, PME, thermostats, constraints,
+minimisation), RHF and UHF with STO-3G and 6-31G for H–Ne, analytic
+gradients and geometry optimisation, and the kinetics solvers.
+
+Known gaps compared with mature packages:
+
+- **Basis sets and methods:** STO-3G, 6-31G and cc-pVDZ (H–Ar for cc-pVDZ), with
+  spherical d functions for cc-pVDZ (energies only; no d-shell gradients).
+  No DFT and no correlated methods. LAMMPS, GROMACS and PySCF cover far more.
+- **Force fields:** SPC and TIP3P water, and an AMBER-style subset with atom
+  types assigned by hand. No OPLS or UFF parameter sets yet.
+- **Crystallography:** general-position operations for all 230 space groups.
+  Wyckoff letters are not enumerated.
+- **Validation:** most constants are checked against repository tests and
+  published reference energies, not against a measured-data campaign.
+  The aqueous defaults are illustrative.
+- **Platforms:** Kani proofs run on Linux CI only. Continuous integration
+  needs the sibling `tpt-math` checkout.
+
+The full list of open work is in [`todo.md`](todo.md).
 
 ## Synergies (spec.txt §5)
 

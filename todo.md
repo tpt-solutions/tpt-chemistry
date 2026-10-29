@@ -313,7 +313,12 @@ must be replaced with measured data.*
 - [x] README crate and example table rows
 - [x] Build and test inside the full workspace (needs `../tpt-math` checkout; builds and passes with `tpt-math` cloned as a sibling)
 - [x] `cargo deny check` clean with the new crate
-- [ ] Validate Pitzer/eNRTL and phosphate constants against measured data; document sources
+- [ ] Validate Pitzer/eNRTL and phosphate constants against measured data; document sources.
+      Pitzer: NaCl, KCl, CaCl₂ and MgCl₂ mean activity coefficients are checked against the CRC
+      Handbook measured series (0.1–5 mol/kg for NaCl and KCl, 0.1–1 mol/kg for CaCl₂ and MgCl₂).
+      Worst deviations are 0.003, 0.003, 0.0014 and 0.007. CaCl₂ is not accurate above 1 mol/kg
+      with a binary-only model (0.016 at 2 mol/kg). Tests are in `activity/pitzer.rs`. Still open:
+      eNRTL and the phosphate constants, since no measured data source is available for them
 - [x] Nucleation/kinetic onset model: `NucleationKinetics` (Söhnel–Garside `J = A·exp(−B/ln²S)`) and `CalciumPhosphateSystem::kinetic_onset_ph`; defaults are illustrative and need calibration against induction-time data
 - [x] Add an entry for `tpt-chem-aqueous` to `spec.txt` §4
 
@@ -408,8 +413,12 @@ usability/automation, and adoption work. Ordered roughly by priority.*
       is `#[ignore]`d in debug builds — run with `--release -- --ignored`)
 - [ ] Larger basis sets: 6-31G for H–Ne done (`BasisSet::Pople631g`, data
       from BSE in `basis_631g.rs`; H₂/water energies and gradients
-      validated; `*_with_basis` entry points, CLI `--basis`). Still open:
-      d functions / cc-pVDZ (needs spherical-d, d-shell gradients), heavier
+      validated; `*_with_basis` entry points, CLI `--basis`). cc-pVDZ for H–Ar is added (`BasisSet::CcPvdz`, data from BSE via `tools/gen_cc_pvdz.py`).
+      Spherical d shells go through a Cartesian-to-spherical transform
+      (`tpt-chem-quantum/src/spherical.rs`): the functions are orthonormal, and the energy is
+      rotation invariant to 1e-8. Energies only: gradients refuse spherical bases, and cube output
+      and Molden are not validated for them. Still open: d-shell gradients, Molden for spherical
+      shells, heavier
       elements
 - [x] Cube output (`tpt-chem-quantum/src/cube.rs`: density and MO values on a grid, Gaussian `.cube` writer; density integrates to N_e and MOs to 1 in tests; `water_cube` example. Grid spacing ~0.1 Bohr is needed for the O 1s core)
 - [x] Molden orbital output (`tpt-chem-quantum/src/molden.rs`; molden
@@ -436,7 +445,11 @@ usability/automation, and adoption work. Ordered roughly by priority.*
       virial, `ensemble::pressure_bar` (`(2KE/3 + W/3)/V` in bar via
       `KJ_MOL_ANG3_TO_BAR`)
 - [x] Energy minimisation: steepest descent with backtracking line
-      search (`tpt-chem-md/src/minimiser.rs`); L-BFGS left open
+      search (`tpt-chem-md/src/minimiser.rs`); L-BFGS added as `minimise_lbfgs`
+      (two-loop recursion, Armijo backtracking, restart from steepest descent on
+      line-search failure; tested on a dimer and a smooth 27-atom cluster, where
+      it needs about 6× fewer steps. Periodic lattices with an unshifted LJ cutoff
+      are not smooth enough for either method, so they are not used as the benchmark)
 - [x] Constraints: SHAKE / RATTLE (`tpt-chem-md/src/constraints.rs`;
       `Constraints::step` = constrained velocity Verlet over any `ForceModel`;
       rigidity + energy-drift tests; DOF correction left to the caller)
@@ -446,7 +459,11 @@ usability/automation, and adoption work. Ordered roughly by priority.*
       (time-origin averaged), VACF, Einstein and Green–Kubo diffusion
       (`tpt-chem-md/src/observables.rs`; VDOS via FFT of the VACF left as
       a user step)
-- [ ] Force-field parameter library: SPC and TIP3P rigid water done
+- [ ] Force-field parameter library: an AMBER-style subset is added (`tpt-chem-md/src/amber.rs`:
+      harmonic bonds and angles, periodic torsions including impropers, LJ and Coulomb with 1-4
+      scaling, forces by autodiff). Energy and forces match OpenMM amber14 on N-methylacetamide to
+      1e-3 kJ/mol (`tests/amber_openmm.rs`, fixture from `tools/amber_reference.py`). Atom types are
+      assigned by hand, and OPLS and UFF are still open. SPC and TIP3P rigid water done
       (`tpt-chem-md/src/water.rs`: `water_box` wires charges, intramolecular
       exclusions and SHAKE constraints; `examples/water_pme.rs` gives
       −39.7 kJ/mol/molecule PE at 300 K with PME and ~1 kJ/mol NVE drift
@@ -467,7 +484,13 @@ usability/automation, and adoption work. Ordered roughly by priority.*
 - [x] Parameter fitting and sensitivity analysis (`tpt-chem-kinetics/src/fit.rs`: `fit_rates` is Levenberg–Marquardt on ln k with RK4 integration, recovers the rates of A→B→C from noise-free data to 1e-5; `sensitivity` gives normalized ∂y/∂ln k, checked against the analytic decay result. Unweighted. `FitResult::log_std_errors` gives standard errors of ln k from the linearized covariance, and a 60-replicate test checks them against the spread of fitted values)
 
 **Crystal (`tpt-chem-crystal`)**
-- [ ] Full 230 space groups (generate from Hall symbols)
+- [x] Full 230 space groups: general-position operations for all 230 standard settings in
+      `data/spacegroups.txt`, generated from the spglib database by `tools/gen_spacegroups.py`.
+      The generator reads spglib's table rather than running a Hall-symbol parser. Tests check
+      group closure and known operation counts for all 230 (`tests/space_groups.rs`). Wyckoff
+      letters are not enumerated, but orbits of special seed positions work for every group.
+      Checking the table exposed three wrong hand-coded groups (P2₁, P2₁2₁2₁ and P6/mmm), so
+      `by_symbol` now reads the table
 - [x] CIF → structure → XRD pipeline helper (`tpt_chemistry::pipeline::{xrd_from_cif, lattice_from_cif, structure_from_cif}`, behind `io`+`crystal`+`core`; no symmetry expansion, so the CIF must list every atom in the cell)
 - [x] Supercell and slab builders (`tpt-chem-crystal/src/build.rs`)
 
@@ -475,22 +498,58 @@ usability/automation, and adoption work. Ordered roughly by priority.*
 - [x] `.gro` reader/writer (`tpt-chem-io/src/gro.rs`, nm↔Å at the API
       boundary, round-trip + fixed-column reference tests)
 - [x] SDF (V2000) reader/writer (`tpt-chem-io/src/sdf.rs`; bonds, `M  CHG` read into total charge)
-- [ ] SMILES readers/writers
-- [ ] Binary trajectories (DCD / XTC)
+- [x] Gaussian input/output (spec.txt §3 lists "Gaussian input/output parsing" for `tpt-chem-io`;
+      it was missing from this todo). `tpt-chem-io/src/gaussian.rs`: `write_gaussian_input` /
+      `parse_gaussian_input` (route, title, charge/multiplicity, Cartesian coordinates, Link 0
+      lines skipped) and `parse_gaussian_output` (last `SCF Done` energy, last `Standard
+      orientation` geometry, normal-termination flag). Output fixtures are hand-written in
+      Gaussian's documented layout and have not been checked against a real Gaussian run
+- [x] SMILES reader (`tpt-chem-io/src/smiles.rs`, `parse_smiles`: organic subset with implicit H,
+      bracket atoms, charges, aromatic lowercase, ring closures incl. `%nn`, branches; graph and
+      formula only, atoms at the origin; stereo marks ignored, no kekulization)
+- [x] SMILES writer (`write_smiles`: canonical output. Atoms are ranked from element, degree,
+      H count and aromaticity, refined by neighbourhood, and ties are broken by keeping the
+      smallest string over all candidates. Relabelled copies give identical strings (tested).
+      Ring closures, branches and bond symbols; round-trips through `parse_smiles`. Refuses
+      net-charged molecules, since per-atom charges are not stored in `Molecule`)
+- [x] Binary trajectories, DCD: `tpt-chem-io/src/dcd.rs` reads and writes DCD files, checked in
+      against OpenMM's `DCDFile` output (`tests/dcd_openmm.rs`; our writer's frame records match
+      OpenMM's bytes).
+      The time step is in CHARMM AKMA units. XTC is still open: its compressed-coordinate format
+      needs a clean implementation checked against an oracle, and I did not port the LGPL
+      reference code
 
 ### 5.3 Innovation
 
-- [ ] Python bindings (PyO3 + maturin), ASE/MDAnalysis interop
-- [ ] WASM build and a browser demo ("run HF in your browser")
+- [x] Python bindings (PyO3 + maturin): `crates/tpt-chem-py` (outside the workspace, since the
+      extension links libpython). `rhf_energy_xyz`, `formula_from_smiles`, `canonical_smiles`;
+      pytest suite passes against a release wheel
+- [x] ASE interop: an ASE calculator for RHF/STO-3G energies and analytic forces
+      (`crates/tpt-chem-py/ase_calculator.py`; forces checked against finite differences). ASE is
+      LGPL-2.1, so it is optional: the test skips without it. See `docs/third-party.md`
+- [x] WASM build and a browser demo ("run HF in your browser"): `crates/tpt-chem-wasm`
+      (wasm-pack `--target web`, `www/index.html`). Node smoke test `tests/smoke.mjs` passes
+      and matches the native energy. The page itself has not been opened in a browser
 - [x] ASE-style `Potential` trait (`tpt-chem-core/src/potential.rs`, no_std;
       Å / kJ·mol⁻¹ units) with a generic BFGS `minimize_bfgs`; implemented
       by `RhfPotential` (quantum) and `ModelPotential` (MD); ML potentials
       can plug in the same way
-- [ ] ML interatomic-potential plug-in (pure-Rust MLP or ONNX) driving the
-      same integrators
-- [ ] Autodiff hooks for differentiable molecular design (per README promise)
-- [ ] Published validation/benchmark table (reference energies, energy-drift
-      plots)
+- [x] ML interatomic-potential plug-in (pure-Rust MLP) driving the same integrators:
+      `tpt-chem-md/src/mlp.rs` (radial Gaussian symmetry functions, tanh network, analytic
+      forces checked against finite differences, gradient-descent training, NVE via
+      `VelocityVerlet::step_with`). Single species, radial only, no ONNX import. Training
+      cut the MSE on LJ cluster energies by about 300×
+- [x] Autodiff hooks for differentiable molecular design (per README promise): forward-mode dual
+      numbers in the `no_std` core (`tpt-chem-core/src/autodiff.rs`). The AMBER model's forces come
+      from them, and the generic Lennard-Jones gradient matches the analytic all-pairs forces to
+      1e-9 (`tpt-chem-md/tests/autodiff_forces.rs`). Reverse mode for large parameter sets is still open
+- [x] Independent checks against OpenMM: isolated LJ + Coulomb (relative 1e-6), periodic Ewald
+      against OpenMM PME (1e-3 kJ/mol), and the AMBER model on N-methylacetamide (1e-3 kJ/mol).
+      These found a bug: the Ewald heuristic was under-converged (α·r_c ≈ 1.77, about 0.6% low in
+      energy). It now targets 1e-8 from σ = √(−ln 10⁻⁸)
+- [x] Validation and benchmark table in the mdBook (`book/src/validation.md`), with each
+      number tied to the test that enforces it. Energy-drift plots are not included; external
+      publication is out of scope
 - [x] Run manifest (versions, seed, params) written alongside every output: `tpt_chemistry::manifest::RunManifest` (JSON with crate versions, enabled features, seed, params, inputs, FNV-1a output hashes; no timestamp so reruns match). The `tpt-chem` CLI writes `<out>.manifest.json` for `hf --opt --out` and `md --out`. The `water_hf` and `water_cube` examples also write manifests. Only those two examples write files, so the rest need none. The CLI xrd and kinetics commands print to stdout and write no file
 - [x] Optional `rayon` feature for ERI shell quartets and force loops. The
       `rayon` feature (opt-in; forwarded by the umbrella) parallelizes the MD
@@ -511,9 +570,15 @@ usability/automation, and adoption work. Ordered roughly by priority.*
       left open
 - [x] Feature-gated `serde` support for `Molecule`, `System`, result structs. Behind a `serde` feature (forwarded by the umbrella crate): `Molecule` (rebuilt through its constructors on load, so invalid input is an error), `Vec3`, `Atom`, `Bond`, the MD `System` with its topology and exclusions (exclusions serialize as a sorted list, so output is deterministic), and `HfResult`. Also the kinetics networks, rate laws and fit results (`fit.rs`), and crystal lattices and Bravais types. Note: serde_json needs its `float_roundtrip` feature for bit-exact f64 round trips
 - [x] Per-crate `prelude` modules and a `System` builder (`tpt_chem_md::system::SystemBuilder` validates topology and exclusion indices and can seed thermal velocities; md, quantum and kinetics have preludes; core already had one)
-- [ ] CI: criterion benchmark job with regression alerts
-- [ ] CI: `cargo doc -D warnings` (done in the test job), MSRV check, `cargo semver-checks`,
-      Dependabot, `cargo llvm-cov` coverage
+- [x] CI: criterion benchmark job (`tpt-chem-md` force kernels, `tpt-chem-quantum` RHF water).
+      Alerts use github-action-benchmark at 150% and do not fail the build yet. The CI job itself
+      has not run on GitHub
+- [ ] CI: MSRV check is blocked. On the pinned 1.84 toolchain, cargo cannot download
+      `cpufeatures 0.3.1`, which the lockfile pulls in, so the job would fail on day one. Fix
+      by pinning that dependency or raising `rust-version`
+- [x] CI: Dependabot (`.github/dependabot.yml`, cargo and github-actions, weekly)
+- [ ] CI: `cargo semver-checks` (needs a published baseline, so it is part of publishing) and
+      `cargo llvm-cov` coverage
 - [ ] Release automation (`release-plz` / `cargo-release`) and lifting the
       "publishing out of scope" decision
 - [x] `justfile` targets: `doc` (warnings denied), `examples` (all 11 umbrella examples, verified to exit 0), `bench` (runs nothing until the criterion job exists)
@@ -531,17 +596,17 @@ usability/automation, and adoption work. Ordered roughly by priority.*
         (stochastic vs deterministic)
   - [x] `silicon_xrd` / `nacl_xrd` (CSV pattern output)
   - [x] `cif_to_xrd` (end-to-end file I/O pipeline)
-- [ ] Starter template (`cargo generate` / GitHub template repo) that loads
-      an XYZ and runs a job. Partly done: `examples/xyz_energy.rs` reads an
-      XYZ and runs RHF/STO-3G, meant to be copied as a starting point. The
-      `cargo generate` template is still open
+- [x] Starter template (`templates/starter`, a cargo-generate template). It reads an XYZ and
+      runs RHF/STO-3G. Verified by rendering it and by `cargo generate --path`, then building
+      and running the output. A GitHub template repository is not created
 - [x] `data/` folder of sample structures (water, benzene, argon box, NaCl,
       silicon). XYZ for all five; PDB for the three molecules; CIF (P1) for
       argon and silicon, since a CIF is only meaningful for crystals. All
       parsed and geometry-checked by `tpt-chem-io/tests/data_samples.rs`
-- [ ] mdBook tutorial: 5-minute quick start, "which crate do I need?" table,
-      units cheat-sheet (Å/kJ·mol⁻¹/fs vs Bohr/Hartree), validation page
-- [ ] Jupyter notebooks (Binder/Colab) once Python bindings exist
-- [ ] README upgrade: badges, status/accuracy table, feature matrix vs
-      LAMMPS/PySCF/GROMACS
+- [x] mdBook tutorial (`book/`, builds with `mdbook build book`): quick start, "which crate do
+      I need?" table, units cheat-sheet, common mistakes, validation, bindings
+- [ ] Jupyter notebooks (Binder/Colab): `notebooks/tpt_chemistry_quickstart.ipynb` exists and its
+      code cells run against the wheel. Binder/Colab configuration is not done
+- [ ] README upgrade: badges, status and limits, and interfaces are done. A quantitative feature
+      matrix against LAMMPS/PySCF/GROMACS is still open, because it needs measured comparisons
 - [x] "Common mistakes" doc section (`docs/common-mistakes.md`: units by crate, Å vs Bohr, Hartree vs kJ·mol⁻¹, molality, activity pH)

@@ -1,0 +1,8 @@
+[book]
+title = "tpt-chemistry"
+authors = ["TPT Solutions"]
+language = "en"
+src = "src"
+
+[build]
+build-dir = "book-output"
