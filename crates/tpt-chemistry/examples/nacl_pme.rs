@@ -27,7 +27,7 @@ fn main() {
                     (0.0, 0.5, 0.5),
                 ];
                 for (fi, fj, fk) in frac {
-                    let is_na = (i + j + k + (fi * 2.0) as usize) % 2 == 0;
+                    let is_na = (i + j + k + (fi * 2.0) as usize).is_multiple_of(2);
                     sys.add_atom(
                         tpt_chemistry::core::forcefield::LennardJones {
                             sigma: 2.0,
