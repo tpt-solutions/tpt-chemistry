@@ -1,0 +1,31 @@
+[package]
+name = "tpt-chem-py"
+description = "Python bindings (PyO3) for tpt-chemistry: RHF energies and SMILES helpers"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.84"
+license = "MIT OR Apache-2.0"
+authors = ["TPT Solutions"]
+publish = false
+
+# Built with maturin, not with the workspace: the extension links against
+# libpython, which `cargo test` on the workspace would fail to link on Windows.
+[workspace]
+
+[lib]
+name = "tpt_chem"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.30", features = ["extension-module"] }
+tpt-chem-core = { path = "../tpt-chem-core" }
+tpt-chem-io = { path = "../tpt-chem-io" }
+tpt-chem-quantum = { path = "../tpt-chem-quantum" }
+
+[lints.clippy]
+all = "warn"
+
+# PyO3's generated glue contains `unsafe`, which the workspace's
+# `forbid(unsafe_code)` would reject, so this crate sets its own lint table.
+[lints.rust]
+unsafe_op_in_unsafe_fn = "warn"
