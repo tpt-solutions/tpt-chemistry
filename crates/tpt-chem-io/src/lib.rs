@@ -30,6 +30,7 @@ pub mod pdb;
 pub mod sdf;
 pub mod smiles;
 pub mod trajectory;
+pub mod xtc;
 pub mod xyz;
 
 pub use dcd::{DcdReader, DcdWriter};
