@@ -113,3 +113,36 @@ jobs:
           cargo kani setup
       - run: cargo kani --workspace
         working-directory: tpt-chemistry
+
+  # Criterion benchmarks in libtest "bencher" format, compared against the
+  # stored baseline on master. Alerts comment on the pull request; they do
+  # not fail the job until the threshold has been tuned on real runner noise.
+  bench:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: tpt-chemistry
+      - uses: actions/checkout@v4
+        with:
+          repository: tpt-solutions/tpt-math
+          path: tpt-math
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run criterion benchmarks
+        working-directory: tpt-chemistry
+        run: |
+          cargo bench -p tpt-chem-md --bench force_kernels -- --output-format bencher | tee bench.txt
+          cargo bench -p tpt-chem-quantum --bench rhf_water -- --output-format bencher | tee -a bench.txt
+      - uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: tpt-chemistry criterion
+          tool: cargo
+          output-file-path: tpt-chemistry/bench.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: ${{ github.event_name == 'push' }}
+          comment-on-alert: ${{ github.event_name == 'pull_request' }}
+          alert-threshold: "150%"
+          fail-on-alert: false
