@@ -573,9 +573,9 @@ usability/automation, and adoption work. Ordered roughly by priority.*
 - [x] CI: criterion benchmark job (`tpt-chem-md` force kernels, `tpt-chem-quantum` RHF water).
       Alerts use github-action-benchmark at 150% and do not fail the build yet. The CI job itself
       has not run on GitHub
-- [ ] CI: MSRV check is blocked. On the pinned 1.84 toolchain, cargo cannot download
-      `cpufeatures 0.3.1`, which the lockfile pulls in, so the job would fail on day one. Fix
-      by pinning that dependency or raising `rust-version`
+- [x] CI: MSRV check. `rust-version` raised to 1.88 (the sibling `tpt-math` crates need 1.85 and
+      `proptest 1.12` needs 1.88). `cargo +1.88 check --workspace --all-targets` passes locally;
+      the `msrv` job in `ci.yml` has not run on GitHub yet
 - [x] CI: Dependabot (`.github/dependabot.yml`, cargo and github-actions, weekly)
 - [ ] CI: `cargo semver-checks` (needs a published baseline, so it is part of publishing) and
       `cargo llvm-cov` coverage

@@ -62,6 +62,23 @@ jobs:
         env:
           RUSTDOCFLAGS: -D warnings
 
+  # Builds on the oldest supported toolchain, matching `rust-version` in the
+  # workspace Cargo.toml. Dependencies resolve fresh here (Cargo.lock is not
+  # committed), so a newer transitive dependency can break this job first.
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: tpt-chemistry
+      - uses: actions/checkout@v4
+        with:
+          repository: tpt-solutions/tpt-math
+          path: tpt-math
+      - uses: dtolnay/rust-toolchain@1.88
+      - run: cargo check --workspace --all-targets
+        working-directory: tpt-chemistry
+
   deny:
     runs-on: ubuntu-latest
     steps:
@@ -136,11 +153,30 @@ jobs:
         run: |
           cargo bench -p tpt-chem-md --bench force_kernels -- --output-format bencher | tee bench.txt
           cargo bench -p tpt-chem-quantum --bench rhf_water -- --output-format bencher | tee -a bench.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bench-output
+          path: tpt-chemistry/bench.txt
+
+  # benchmark-action runs git from the workspace root and has no input to
+  # point it elsewhere, so the tracking step runs in its own job with the
+  # repository checked out at the root. The benchmark output comes from `bench`.
+  bench-track:
+    needs: bench
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: bench-output
       - uses: benchmark-action/github-action-benchmark@v1
         with:
           name: tpt-chemistry criterion
           tool: cargo
-          output-file-path: tpt-chemistry/bench.txt
+          output-file-path: bench.txt
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: ${{ github.event_name == 'push' }}
           comment-on-alert: ${{ github.event_name == 'pull_request' }}
