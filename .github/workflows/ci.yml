@@ -218,6 +218,6 @@ jobs:
           output-file-path: bench.txt
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: ${{ github.event_name == 'push' }}
-          comment-on-alert: ${{ github.event_name == 'pull_request' }}
+          comment-on-alert: ${{ github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' }}
           alert-threshold: "150%"
           fail-on-alert: false
