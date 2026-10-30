@@ -208,7 +208,7 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: bench-output
       - uses: benchmark-action/github-action-benchmark@v1
