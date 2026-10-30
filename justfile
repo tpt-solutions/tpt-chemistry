@@ -21,16 +21,12 @@ test:
 deny:
     cargo deny check
 
-# Everything CI runs, minus Kani
+# Everything CI runs
 check: fmt-check clippy test deny
 
 # Build tpt-chem-core for a bare-metal no_std target
 no-std:
     cargo build -p tpt-chem-core --target thumbv6m-none-eabi --no-default-features
-
-# Bounded model checking (Kani does not support Windows; run on Linux/WSL)
-kani:
-    cargo kani -p tpt-chem-verify
 
 # Release build
 release:
