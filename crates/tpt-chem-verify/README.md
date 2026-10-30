@@ -3,7 +3,7 @@
 Verification harnesses for [`tpt-chemistry`](../../README.md). This crate holds
 the checks that prove the physics stays correct as the rest of the workspace
 changes: property-based tests, reusable conservation-law assertions, and
-bounded model-checking proofs.
+edge-case properties at boundaries and coincident centres.
 
 It is a test-support crate. It is not needed to use the simulators; the
 umbrella crate exposes it only behind the `verify` feature.
@@ -12,10 +12,10 @@ umbrella crate exposes it only behind the `verify` feature.
 
 | Module | What it provides |
 |---|---|
-| `strategies` | `proptest` strategies that generate valid molecular geometries and force-field parameters. |
+| `strategies` | `proptest` strategies that generate valid molecular geometries and force-field parameters, plus `edge_f64` corner values. |
 | `conservation` | Reusable conservation-law assertions, such as `assert_energy_conserved` for MD and symplecticity checks. |
 | `mass_conservation` | Mass-conservation properties for closed reaction networks: RK4, the stiff solver, the SSA, and randomized states. |
-| `proofs` | Kani bounded-model-checking harnesses, compiled only under `cfg(kani)`: cell-index bounds, Ewald index range, and Verlet skin monotonicity. |
+| `edge_cases` | Property tests, compiled only under `cfg(test)`: cell-index bounds, the Verlet rebuild criterion (open and periodic), SCF density positive semi-definiteness, and integrals at coincident centres and near-zero separations. |
 
 The aqueous-model property tests are a private `#[cfg(test)]` module.
 
@@ -56,16 +56,13 @@ assert_energy_conserved(&mut sys, 200, 1.0, 5e-3);
 
 ```sh
 cargo test -p tpt-chem-verify            # proptest properties and conservation checks
-cargo kani -p tpt-chem-verify            # Kani proofs (Linux only)
 ```
-
-Kani does not support Windows hosts. The proofs run in CI on Linux only.
 
 ## Adding a new property
 
 1. Put a generator in `strategies` if you need a new kind of random input.
 2. Put a reusable invariant in `conservation` or `mass_conservation`.
-3. Call it from a `proptest!` block in your test file, or from a Kani harness if the property is bounded and worth proving exhaustively.
+3. Call it from a `proptest!` block in your test file.
 
 ## Status
 

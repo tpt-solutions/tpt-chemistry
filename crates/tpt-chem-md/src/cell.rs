@@ -94,8 +94,7 @@ impl CellList {
     /// Flat cell index for grid coordinates. The caller must keep
     /// `i < nx`, `j < ny`, `k < nz`; the flattening itself is
     /// `k_total = (i·ny + j)·nz + k < nx·ny·nz` — this invariant is
-    /// formally proven in `tpt-chem-verify` (Kani harness
-    /// `cell_index_in_bounds`).
+    /// property-tested in `tpt-chem-verify` (`cell_index_in_bounds`).
     #[inline]
     pub fn cell_index(&self, i: usize, j: usize, k: usize) -> usize {
         (i * self.n_cells[1] + j) * self.n_cells[2] + k

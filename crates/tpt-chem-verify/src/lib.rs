@@ -3,9 +3,9 @@
 //!
 //! Property-based testing strategies (`proptest`) for generating valid
 //! molecular geometries and force-field parameters, plus reusable
-//! conservation-law checks. The Kani bounded-model-checking harnesses live
-//! behind `#[cfg(kani)]` and run on Linux via CI (Kani does not support
-//! Windows hosts).
+//! conservation-law checks. Boundary and corner-case properties (cell
+//! indexing, Verlet rebuild criterion, SCF density positivity, integral
+//! evaluation at coincident centres) run under `cargo test`.
 //!
 //! # Examples
 //!
@@ -34,8 +34,7 @@
 #[cfg(test)]
 mod aqueous;
 pub mod conservation;
+#[cfg(test)]
+mod edge_cases;
 pub mod mass_conservation;
-#[allow(unexpected_cfgs)]
-#[cfg(kani)]
-pub mod proofs; // Kani-only: run via `cargo kani` on Linux
 pub mod strategies;

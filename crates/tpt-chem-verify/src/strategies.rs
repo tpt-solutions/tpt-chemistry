@@ -26,6 +26,49 @@ pub fn arb_temperature() -> impl Strategy<Value = f64> {
     1.0f64..600.0
 }
 
+/// Finite `f64` values at the corners that the edge-case properties in
+/// `edge_cases` need: signed zero, the smallest normal and subnormal magnitudes, very large and
+/// very small magnitudes, and the representable neighbours of 0 and 1 (via
+/// `next_up` / `next_down`). Mixed with ordinary values so generated inputs
+/// hit both the boundaries and the bulk.
+pub fn edge_f64() -> impl Strategy<Value = f64> {
+    prop_oneof![
+        Just(0.0),
+        Just(-0.0),
+        Just(f64::MIN_POSITIVE),
+        Just(-f64::MIN_POSITIVE),
+        Just(f64::from_bits(1)),
+        Just(-f64::from_bits(1)),
+        Just(1e-300),
+        Just(-1e-300),
+        Just(1e300),
+        Just(-1e300),
+        Just(next_up(0.0)),
+        Just(next_down(0.0)),
+        Just(next_up(1.0)),
+        Just(next_down(1.0)),
+        -1000.0f64..1000.0,
+    ]
+}
+
+/// The smallest `f64` strictly greater than `x` (finite, non-NaN input).
+pub fn next_up(x: f64) -> f64 {
+    if x == 0.0 {
+        return f64::from_bits(1);
+    }
+    let bits = x.to_bits();
+    if x > 0.0 {
+        f64::from_bits(bits + 1)
+    } else {
+        f64::from_bits(bits - 1)
+    }
+}
+
+/// The largest `f64` strictly less than `x` (finite, non-NaN input).
+pub fn next_down(x: f64) -> f64 {
+    -next_up(-x)
+}
+
 /// A deterministic seed for the in-house RNG.
 pub fn arb_seed() -> impl Strategy<Value = u64> {
     any::<u64>()

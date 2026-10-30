@@ -7,6 +7,14 @@ and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ## [Unreleased]
 
+### Changed
+
+- Replaced the Kani bounded-model-checking harnesses with `proptest` edge-case properties in the `edge_cases` module, run by `cargo test`. Kani timed out on symbolic `f64` (the Boys function and cell wrapping), so its proofs did not gate PRs.
+
+### Removed
+
+- The `proofs` module, the `cfg(kani)` lint configuration, and the Kani CI jobs.
+
 ## [0.1.0] - not yet released
 
 ### Added
