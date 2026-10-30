@@ -260,7 +260,7 @@ electrostatics, and formal (Kani) verification.*
 ### Phase 3 exit check
 
 - [x] `cargo build` + `cargo test` green across the whole workspace
-- [ ] All Kani harnesses pass (bounded model checking green) — needs the Linux CI runner
+- [ ] (superseded by Phase 6; Kani removed) All Kani harnesses pass (bounded model checking green) — needs the Linux CI runner
 - [x] PME long-range electrostatics validated against Ewald direct-sum reference: matching wavenumber cutoffs agree to 5.4e-5 relative (32³) and forces to 4e-2 kJ·mol⁻¹·Å⁻¹, with clean 4th-order convergence (error ÷16 per mesh doubling, asserted in tests); PME forces verified as the exact gradient of the mesh energy by central finite differences
 
 ---
@@ -348,7 +348,7 @@ must be replaced with measured data.*
       direct Ewald sum: matched-cutoff agreement at the 4th-order
       discretization level, exact mesh-energy gradient forces, neutral-force
       sum. `tpt-dsp` can later replace the FFT backend without API change.
-- [ ] Kani proofs run only on Linux CI (no Windows host support); harnesses
+- [ ] (superseded by Phase 6; Kani removed) Kani proofs run only on Linux CI (no Windows host support); harnesses
       are written and compile-gated behind `#[cfg(kani)]`.
 - [x] PME-vs-Ewald validation test (Phase 3 exit): `pme_matches_ewald_with_matching_wavenumber_cutoff` and `pme_converges_to_ewald_as_mesh_refines` in `crates/tpt-chem-md/src/pme.rs`.
 
@@ -372,7 +372,7 @@ usability/automation, and adoption work. Ordered roughly by priority.*
       `density_from_orbitals` so the harness proves the actual code)
 - [x] Kani proof: no panics in ERI evaluation (r→0 handling)
       (`eri_r_zero_no_panic`, `eri_p_shell_coincident_no_panic`)
-- [ ] Run and confirm all Kani harnesses pass on Linux CI
+- [ ] (superseded by Phase 6; Kani removed) Run and confirm all Kani harnesses pass on Linux CI
 - [x] `rhf`: dedicated `HfError::BasisTooLarge` when the basis exceeds
       `MAX_BASIS` (tested)
 - [x] `rhf`: removed the `f64::from(n_occ as u8)` truncation
@@ -635,3 +635,64 @@ usability/automation, and adoption work. Ordered roughly by priority.*
 - [ ] README upgrade: badges, status and limits, and interfaces are done. A quantitative feature
       matrix against LAMMPS/PySCF/GROMACS is still open, because it needs measured comparisons
 - [x] "Common mistakes" doc section (`docs/common-mistakes.md`: units by crate, Å vs Bohr, Hartree vs kJ·mol⁻¹, molality, activity pH)
+
+---
+
+## Phase 6 — Replace Kani with proptest + edge-case sweeps (2026-10-30)
+
+*Kani (CBMC) times out on symbolic `f64` (Boys function, cell wrapping), so
+the four meaningful harnesses live in the non-gating `kani-slow` CI job and
+the two gating ones are weak (`ewald_reciprocal_indices_in_range` is close to
+a tautology; `verlet_needs_update_monotone` asserts one direction only).
+Replace them with ordinary property tests that run in `cargo test
+--workspace` and so gate every PR. Trade-off: randomized evidence, not an
+exhaustive proof over all `f64`.*
+
+### 6.1 Property tests (replace `crates/tpt-chem-verify/src/proofs.rs`)
+
+- [x] `strategies.rs`: add an `edge_f64()` strategy (0, -0.0, ±tiny,
+      subnormals, large, `nextafter` boundaries) for Kani-like corner coverage
+- [x] proptest `cell_index_in_bounds`: box length 0.5–100, positions in
+      [0, L) plus boundary values; assert `i,j,k < n` and
+      `cell_index < total_cells` (`tpt-chem-md::cell::CellList`)
+- [x] Drop `ewald_reciprocal_indices_in_range` (tautology: it only asserts
+      `nmax_h >= 1`). Test real Ewald k-vector indexing instead if/when that
+      code is exposed
+- [x] proptest `verlet_needs_update`: assert both directions (displacement
+      below skin/2 → no rebuild; above skin/2 → rebuild), open and periodic
+- [x] proptest `density_from_orbitals` PSD: random 2×2 and N×N coefficient
+      matrices; symmetry, diagonal ≥ -tol, min eigenvalue ≥ -tol
+- [x] proptest ERI/nuclear at r→0 (s shell): finite, ERI > 0, attraction < 0,
+      including near-zero separations
+- [x] proptest (pp|pp) at coincident centres: all elements finite and
+      `kinetic_shell` = 5α/2 within 1e-9
+- [x] Sanity check: temporarily break `CellList::cell_of` (off-by-one) and
+      confirm the new test fails, then revert
+
+### 6.2 Remove Kani
+
+- [x] Delete `proofs.rs`; remove `#[cfg(kani)] pub mod proofs;` from
+      `tpt-chem-verify/src/lib.rs` and the `unexpected_cfgs` entry from its
+      `Cargo.toml`; drop "Kani" from its description and keywords
+- [x] `.github/workflows/ci.yml`: remove the `kani` and `kani-slow` jobs and
+      any references to them
+- [x] `justfile`: remove the `kani` recipe
+- [x] Update docs: `README.md`, `CONTRIBUTING.md`, `docs/common-mistakes.md`,
+      `book/src/introduction.md`, `crates/tpt-chemistry/{README.md,src/lib.rs}`,
+      `crates/tpt-chem-verify/{README.md,CHANGELOG.md,src/lib.rs}`,
+      `spec.txt`, and the `tpt-chem-md/src/cell.rs` doc comment that points
+      to `cell_index_in_bounds`
+- [x] Reconcile the older Kani items above (Phase 3 exit check, 5.1, and the
+      Linux-only note) once 6.1 lands: mark them superseded, not done
+- [x] `rg -i kani` returns nothing outside `CHANGELOG.md` and this file
+
+### 6.3 Verify
+
+- [x] `cargo test --workspace`, `cargo clippy --workspace -- -D warnings`
+      and `cargo doc` all clean
+- [ ] CI green on a PR with the Kani jobs removed (needs a PR run; not verifiable locally)
+
+### 6.4 Optional follow-ups
+
+- [ ] `cargo-fuzz` target for the ERI / Boys-function path
+- [ ] `debug_assert!` finiteness guards in the integral kernels
