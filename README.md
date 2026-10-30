@@ -61,9 +61,10 @@ CI performs the same sibling checkout in every job (see
 - **Type-state & dimensional safety** — phantom types distinguish Cartesian
   from internal (Z-matrix) coordinates; physical quantities are wrapped with
   compile-time units (`tpt-math-units`).
-- **Native formal verification** — Kani bounded model checking for critical
-  loops, `proptest` for statistical verification of physical laws (energy
-  conservation, mass conservation, phase-space volume preservation).
+- **Property-based verification** — `proptest` checks of physical laws (energy
+  conservation, mass conservation, phase-space volume preservation) and of
+  edge cases at cell boundaries, Verlet rebuilds, SCF densities and integrals
+  at coincident centres.
 - **`no_std + alloc` core** — `tpt-chem-core` builds for bare-metal targets.
 
 ## Crates
@@ -77,7 +78,7 @@ CI performs the same sibling checkout in every job (see
 | [`tpt-chem-aqueous`](crates/tpt-chem-aqueous) | Activity coefficients (Debye–Hückel, Davies, Pitzer, eNRTL), Ksp/saturation indices, chelator-controlled calcium phosphate precipitation onset |
 | [`tpt-chem-crystal`](crates/tpt-chem-crystal) | Bravais lattices, space groups, reciprocal space, XRD simulation |
 | [`tpt-chem-io`](crates/tpt-chem-io) | XYZ, PDB, MOL2, SDF, CIF, GRO readers/writers; SMILES reader and canonical writer; Gaussian input/output; trajectory streaming |
-| [`tpt-chem-verify`](crates/tpt-chem-verify) | proptest strategies, conservation-law checks, Kani harnesses |
+| [`tpt-chem-verify`](crates/tpt-chem-verify) | proptest strategies, conservation-law checks, edge-case properties |
 | [`tpt-chemistry`](crates/tpt-chemistry) | Feature-gated umbrella crate re-exporting all of the above |
 | [`tpt-chem-wasm`](crates/tpt-chem-wasm) | WebAssembly bindings and a browser demo (not published) |
 | [`tpt-chem-py`](crates/tpt-chem-py) | Python bindings built with maturin (outside the workspace, not published) |
@@ -108,8 +109,8 @@ Known gaps compared with mature packages:
 - **Validation:** most constants are checked against repository tests and
   published reference energies, not against a measured-data campaign.
   The aqueous defaults are illustrative.
-- **Platforms:** Kani proofs run on Linux CI only. Continuous integration
-  needs the sibling `tpt-math` checkout.
+- **Platforms:** continuous integration needs the sibling `tpt-math`
+  checkout.
 
 The full list of open work is in [`todo.md`](todo.md).
 
@@ -132,7 +133,6 @@ The full list of open work is in [`todo.md`](todo.md).
 ```sh
 just check      # fmt + clippy + test + cargo deny
 just no-std     # verify the core builds for thumbv6m-none-eabi
-just kani       # bounded model checking (Linux/WSL only)
 ```
 
 ```rust

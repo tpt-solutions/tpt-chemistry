@@ -23,7 +23,7 @@ Ewald, neighbor lists and the solvers are all implemented from scratch.
 | `kinetics` | [`tpt-chem-kinetics`](../tpt-chem-kinetics) | Mass-action networks, stiff and stochastic solvers, Arrhenius/Eyring, rate fitting. |
 | `aqueous` | [`tpt-chem-aqueous`](../tpt-chem-aqueous) | Activity coefficients (Debye–Hückel, Davies, Pitzer, eNRTL), Ksp, Ca-phosphate precipitation. |
 | `crystal` | [`tpt-chem-crystal`](../tpt-chem-crystal) | Bravais lattices, space groups, k-point grids, XRD simulation. |
-| `verify` | [`tpt-chem-verify`](../tpt-chem-verify) | proptest strategies, conservation checks, Kani proofs. |
+| `verify` | [`tpt-chem-verify`](../tpt-chem-verify) | proptest strategies, conservation checks, edge-case properties. |
 | `rayon` | — | Parallel MD force loops and Fock build (forwarded to `tpt-chem-md` and `tpt-chem-quantum`). |
 | `serde` | — | Serialization of result and state types across the enabled crates. |
 

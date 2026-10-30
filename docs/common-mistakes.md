@@ -50,6 +50,3 @@ replaced with measured values before any quantitative use.
 
 **Basis set scope.** STO-3G and 6-31G are implemented for H–Ne. d-function
 basis sets (cc-pVDZ and similar) and heavier elements are not yet supported.
-
-**Stale validation.** Kani proofs run only on Linux CI. A passing local
-`cargo test` does not exercise them.

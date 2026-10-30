@@ -23,8 +23,7 @@ stochastic solvers) is implemented in this workspace.
   Gaussian input and output, and streaming XYZ trajectories.
 
 Open items are listed in `todo.md` in the repository. Two that matter for
-users: XTC trajectories and OPLS/UFF parameters. Kani proofs run on Linux CI
-only.
+users: XTC trajectories and OPLS/UFF parameters.
 
 ## Licence
 

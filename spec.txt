@@ -8,8 +8,7 @@ Core Philosophy: Unit-safe, no_std + alloc compatible at the core, differentiabl
 Zero External Solver Dependencies: No LAMMPS FFI, no Gaussian, no Quantum ESPRESSO. All algorithms (SCF iteration, electron repulsion integrals, Ewald summation, neighbor lists) are implemented from scratch in pure Rust, leveraging tpt-math for linear algebra and ODE solving.
 Strict Licensing: No Apache-2.0-only dependencies. The workspace strictly uses MIT, MIT/Apache-2.0 dual, or custom in-house crates.
 Type-State & Dimensional Safety: Compile-time prevention of unit and coordinate mismatches. Phantom types distinguish between Cartesian and internal (Z-matrix) coordinates. All physical quantities (distance in Angstroms/Bohr, time in femtoseconds, energy in Hartrees/kJ/mol) are wrapped in tpt-math-units.
-Native Formal Verification: Safety and physical invariants enforced via:
-Kani Rust Verifier: For bounded model checking of critical loops (e.g., proving neighbor-list cell indexing is always in-bounds, or that SCF iteration density matrices remain positive semi-definite).
+Property-Based Verification: Safety and physical invariants enforced via:
 Property-Based Testing (proptest): For statistical verification of physical laws (e.g., "Velocity Verlet integration conserves total energy within a bounded tolerance", "mass is strictly conserved in closed reaction networks").
 3. Workspace Layout
 
@@ -23,7 +22,7 @@ tpt-chemistry/
 │   ├── tpt-chem-crystal/      # Solid state: Bravais lattices, space groups, reciprocal space, XRD simulation
 │   ├── tpt-chem-aqueous/      # Aqueous thermodynamics: activity models (DH, Davies, Pitzer, eNRTL), Ksp, chelator-controlled Ca-phosphate precipitation
 │   ├── tpt-chem-io/           # File formats: XYZ, PDB, CIF, MOL2, Gaussian input/output parsing
-│   ├── tpt-chem-verify/       # Verification harnesses: Kani proofs, proptest strategies, conservation law checks
+│   ├── tpt-chem-verify/       # Verification harnesses: proptest strategies, edge-case properties, conservation law checks
 │   └── tpt-chemistry/         # Feature-gated umbrella crate re-exporting all above
 ├── spec.txt                   # This document
 └── todo.md                    # Phased build tracking
@@ -87,7 +86,7 @@ tpt-chem-verify
 Purpose: Mathematical verification of physical algorithms and conservation laws.
 Key Features:
 proptest strategies for generating valid molecular geometries and force field parameters.
-Kani harnesses to prove absence of panics in ERI evaluation (e.g., handling of singularities when 
+Property tests that check absence of panics in ERI evaluation (e.g., handling of singularities when 
 r
 →
 0
@@ -118,4 +117,4 @@ H
 Phase 2: Solid State & Advanced Verification (Weeks 7-9)
 Build tpt-chem-crystal (space groups, reciprocal lattice, XRD).
 Implement Ewald/PME summation in tpt-chem-md using tpt-dsp FFTs.
-Write Kani proofs for ERI singularity handling and neighbor-list bounds.
+Write property tests for ERI singularity handling and neighbor-list bounds.

@@ -35,7 +35,7 @@ CI checks out `tpt-solutions/tpt-math` into a sibling directory in every
 job; keep that layout locally too or the path deps will not resolve.
 
 A local `just` runner (`justfile`) wraps the common commands: `just fmt`,
-`just clippy`, `just test`, `just deny`, `just no-std`, `just kani`.
+`just clippy`, `just test`, `just deny`, `just no-std`.
 
 ## Ground rules
 
@@ -51,7 +51,7 @@ A local `just` runner (`justfile`) wraps the common commands: `just fmt`,
    the default `std` feature.
 5. **Physics is verified, not assumed.** New integrators need an energy- or
    phase-space-conservation property test (`tpt-chem-verify`); new numerical
-   kernels need Kani harnesses or bounded-input tests where they can panic.
+   kernels need property tests or bounded-input tests where they can panic.
 6. **Documentation.** Crate-level docs plus docs on every public item
    (`missing_docs` is a workspace-level warn and denied in CI via `-D
    warnings`).
@@ -61,10 +61,3 @@ A local `just` runner (`justfile`) wraps the common commands: `just fmt`,
 - `cargo fmt` (100-column, edition 2021 defaults — see `rustfmt.toml`).
 - `cargo clippy --all-targets --all-features -- -D warnings` must be clean.
 - Numerics default to `f64`.
-
-## Kani note
-
-The [Kani Rust Verifier](https://github.com/model-checking/kani) does not
-support Windows hosts. The proof harnesses in `crates/tpt-chem-verify` are
-compiled with `cargo kani` on Linux (see `.github/workflows/ci.yml`), or
-locally under WSL.

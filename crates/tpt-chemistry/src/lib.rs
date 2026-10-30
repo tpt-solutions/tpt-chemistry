@@ -12,7 +12,7 @@
 //! | `kinetics` | `tpt-chem-kinetics` | mass-action networks, SSA, Arrhenius/Eyring |
 //! | `aqueous` | `tpt-chem-aqueous` | activity coefficients (DH, Davies, Pitzer, eNRTL), Ksp, chelator-controlled Ca-phosphate precipitation |
 //! | `crystal` | `tpt-chem-crystal` | Bravais lattices, space groups, XRD |
-//! | `verify` | `tpt-chem-verify` | proptest strategies, conservation checks, Kani proofs |
+//! | `verify` | `tpt-chem-verify` | proptest strategies, conservation checks, edge-case properties |
 //!
 //! ```
 //! # #[cfg(feature = "core")]
